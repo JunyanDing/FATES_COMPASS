@@ -1,4 +1,4 @@
-netcdf fates_params_default.c210629_sorted {
+netcdf fates_params_default {
 dimensions:
 	fates_NCWD = 4 ;
 	fates_history_age_bins = 7 ;
@@ -244,6 +244,10 @@ variables:
 		fates_hydr_k_lwp:units = "unitless" ;
 		fates_hydr_k_lwp:long_name = "inner leaf humidity scaling coefficient" ;
 		fates_hydr_k_lwp:possible_values = "0: turns off leaf humidity effects on conductance. 1-10 activates humidity effects" ;
+	double fates_hydr_rt_exl(fates_pft) ;
+		fates_hydr_rt_exl:units = "ratio" ;
+		fates_hydr_rt_exl:long_name = "root salt exclusion ratio" ;
+		fates_hydr_rt_exl:possible_values = "0 to 1, 0: total exclusion, 1: no exclusion" ;
 	double fates_hydr_kmax_node(fates_hydr_organs, fates_pft) ;
 		fates_hydr_kmax_node:units = "kg/MPa/m/s" ;
 		fates_hydr_kmax_node:long_name = "maximum xylem conductivity per unit conducting xylem area" ;
@@ -274,6 +278,18 @@ variables:
 	double fates_hydr_srl(fates_pft) ;
 		fates_hydr_srl:units = "m g-1" ;
 		fates_hydr_srl:long_name = "specific root length" ;
+	double fates_hydr_k_salex(fates_pft) ;
+		fates_hydr_k_salex:units = "fraction" ;
+		fates_hydr_k_salex:long_name = "fraction of total sal exclusion ration 0 - total exclude, 1 - no exclusion" ;
+	double fates_hydr_frt_loss_coe(fates_pft) ;
+		fates_hydr_frt_loss_coe:units = "unitless" ;
+		fates_hydr_frt_loss_coe:long_name = "the coefficient of fine root loss function due to anoxia soil condition" ;
+	double fates_hydr_frt_loss_exp(fates_pft) ;
+		fates_hydr_frt_loss_exp:units = "unitless" ;
+		fates_hydr_frt_loss_exp:long_name = "the exponent of fine root loss function due to anoxia soil condition" ;
+	double fates_hydr_frt_loss_se0(fates_pft) ;
+		fates_hydr_frt_loss_se0:units = "unitless" ;
+		fates_hydr_frt_loss_se0:long_name = "the critical relative soil water content fine root mortality start to increase due to anoxia" ;     
 	double fates_hydr_thetas_node(fates_hydr_organs, fates_pft) ;
 		fates_hydr_thetas_node:units = "cm3/cm3" ;
 		fates_hydr_thetas_node:long_name = "saturated water content" ;
@@ -542,9 +558,9 @@ variables:
 	double fates_z0mr(fates_pft) ;
 		fates_z0mr:units = "unitless" ;
 		fates_z0mr:long_name = "Ratio of momentum roughness length to canopy top height" ;
-        double fates_hlm_pft_map(fates_hlm_pftno, fates_pft) ;
-                fates_hlm_pft_map:units = "area fraction" ;
-                fates_hlm_pft_map:long_name = "In fixed biogeog mode, fraction of HLM area associated with each FATES PFT" ;
+double fates_hlm_pft_map(fates_hlm_pftno, fates_pft) ;
+    fates_hlm_pft_map:units = "area fraction" ;
+    fates_hlm_pft_map:long_name = "In fixed biogeog mode, fraction of HLM area associated with each FATES PFT" ;
 	double fates_fire_FBD(fates_litterclass) ;
 		fates_fire_FBD:units = "kg Biomass/m3" ;
 		fates_fire_FBD:long_name = "fuel bulk density" ;
@@ -661,7 +677,7 @@ variables:
 		fates_init_litter:long_name = "Initialization value for litter pool in cold-start (NOT USED)" ;
 	double fates_leaf_stomatal_model ;
 		fates_leaf_stomatal_model:units = "unitless" ;
-		fates_leaf_stomatal_model:long_name = "switch for choosing between Ball-Berry (1) stomatal conductance model and Medlyn (2) model" ;
+		fates_leaf_stomatal_model:long_name = "switch for choosing between Ball-Berry (1) stomatal conductance model and Medlyn (2) model, Junyan's Ball-Berry version(3), and Medlyn version (4)" ;
 	double fates_logging_coll_under_frac ;
 		fates_logging_coll_under_frac:units = "fraction" ;
 		fates_logging_coll_under_frac:long_name = "Fraction of stems killed in the understory when logging generates disturbance" ;
@@ -754,10 +770,16 @@ variables:
 		fates_vai_top_bin_width:long_name = "width in VAI units of uppermost leaf+stem layer scattering element in each canopy layer (NOT USED)" ;
 	double fates_vai_width_increase_factor ;
 		fates_vai_width_increase_factor:units = "unitless" ;
-		fates_vai_width_increase_factor:long_name = "factor by which each leaf+stem scattering element increases in VAI width (1 = uniform spacing) (NOT USED)" ;
+		fates_vai_width_increase_factor:long_name = "factor by which each leaf+stem scattering element increases in VAI width (1 = uniform spacing) (NOT USED)" ;  
+	double  fates_sal_sid ;
+		fates_sal_sid:units = "unitless" ;
+		fates_sal_sid:long_name = "the site id of salinity file name used to give the salinity file, 1- BC, 2 – CPMS, 3 – CPGWI, 4- TEMPEST" ;
+	double  fates_sal_fid ;
+		fates_sal_fid:units = "unitless" ;
+		fates_sal_fid:long_name = "the number of salinity instance of a given site, used to define salinity input file name " ;
 
 // global attributes:
-		:history = "This parameter file is maintained in version control\nSee https://github.com/NGEET/fates/blob/master/parameter_files/fates_params_default.cdl \nFor changes, use git blame \n" ;
+		:history = "This parameter file is maintained in version control\nSee https://github.com/NGEET/fates/blob/master/parameter_files/fates_params_default.cdl \nFor changes, use git blame \n" ;   
 data:
 
  fates_history_ageclass_bin_edges = 0, 1, 2, 5, 10, 20, 50 ;
@@ -769,7 +791,7 @@ data:
  fates_history_sizeclass_bin_edges = 0, 5, 10, 15, 20, 30, 40, 50, 60, 70,
     80, 90, 100 ;
 
- fates_hydr_htftype_node = 1, 1, 1, 1 ;
+ fates_hydr_htftype_node = 2, 2, 2, 2 ;
 
  fates_prt_organ_id = 1, 2, 3, 6 ;
 
@@ -965,6 +987,12 @@ data:
  fates_hydr_avuln_gs = 2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5,
     2.5 ;
 
+ fates_hydr_k_salex = 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5 ;
+ 
+ fates_hydr_frt_loss_coe = 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 ;
+ 
+ fates_hydr_frt_loss_exp = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ;
+
  fates_hydr_avuln_node =
   2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
   2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
@@ -984,6 +1012,8 @@ data:
   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ;
 
  fates_hydr_k_lwp = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ;
+ 
+ fates_hydr_rt_exl = 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9 ;
 
  fates_hydr_kmax_node =
   -999, -999, -999, -999, -999, -999, -999, -999, -999, -999, -999, -999,
@@ -1486,4 +1516,8 @@ data:
  fates_vai_top_bin_width = 1 ;
 
  fates_vai_width_increase_factor = 1 ;
+ 
+ fates_sal_sid = 1 ;
+
+ fates_sal_fid = 1 ; 
 }

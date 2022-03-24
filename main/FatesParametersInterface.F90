@@ -48,6 +48,7 @@ module FatesParametersInterface
      character(len=param_string_length) :: dimension_names(max_dimensions)
      integer :: dimension_lower_bound(max_dimensions)
      real(r8), allocatable :: data(:, :)
+     character(len=param_string_length), allocatable :: chardata(:,:)     
   end type parameter_type
 
   type, public :: fates_parameters_type
@@ -70,7 +71,7 @@ module FatesParametersInterface
      procedure :: FindIndex
 
      ! Private functions
-     procedure, private :: RetreiveParameterScalar
+     procedure, private :: RetreiveParameterScalar            
      procedure, private :: RetreiveParameter1D
      procedure, private :: RetreiveParameter2D
      procedure, private :: RetreiveParameter1DAllocate
@@ -167,6 +168,23 @@ contains
 
   end subroutine RetreiveParameterScalar
 
+  !-----------------------------------------------------------------------
+  ! Junyan added this routine to receive the scala char parameter
+  subroutine RetreiveParameterChar(this, name, data)
+  
+    implicit none
+
+    class(fates_parameters_type), intent(inout) :: this
+    character(len=param_string_length), intent(in) :: name
+    character(len=param_string_length), intent(out) :: data
+
+    integer :: i
+
+    i = this%FindIndex(name)
+    ! assert(size(data) == size(this%parameters(i)%data))
+    data = this%parameters(i)%chardata(1,1)
+
+  end subroutine RetreiveParameterChar
   !-----------------------------------------------------------------------
   subroutine RetreiveParameter1D(this, name, data)
 

@@ -197,7 +197,15 @@ module EDPftvarcon
      real(r8), allocatable :: hydr_rfrac_stem(:)    ! fraction of total tree resistance from troot to canopy
      real(r8), allocatable :: hydr_avuln_gs(:)      ! shape parameter for stomatal control of water vapor exiting leaf
      real(r8), allocatable :: hydr_p50_gs(:)        ! water potential at 50% loss of stomatal conductance
-     real(r8), allocatable :: hydr_k_lwp(:)         ! inner leaf humidity scaling coefficient 
+     real(r8), allocatable :: hydr_k_lwp(:)         ! inner leaf humidity scaling coefficient
+     ! Junyan added
+     real(r8), allocatable :: hydr_k_salex(:)       ! root salt exclusion, 0 - complete exclusion, 1 - no exclusion
+     real(r8), allocatable :: hydr_frt_loss_coe(:)  ! coefficient of root loss function due to soil saturation
+     real(r8), allocatable :: hydr_frt_loss_exp(:)  ! exponent of root loss function due to soil saturation
+     real(r8), allocatable :: hydr_frt_loss_se0(:)  ! the critical relative soil water content fine root mortality start to increase
+                                                    ! due to anoxia, se = theta - theta_res / theta_sat - theta_res     
+          
+      
 
      ! PFT x Organ Dimension  (organs are: 1=leaf, 2=stem, 3=transporting root, 4=absorbing root)
      ! ----------------------------------------------------------------------------------
@@ -465,6 +473,23 @@ contains
     name = 'fates_hydr_k_lwp'
     call fates_params%RegisterParameter(name=name, dimension_shape=dimension_shape_1d, &
          dimension_names=dim_names, lower_bounds=dim_lower_bound)
+
+    ! Junyan added         
+    name = 'fates_hydr_k_salex'
+    call fates_params%RegisterParameter(name=name, dimension_shape=dimension_shape_1d, &
+         dimension_names=dim_names, lower_bounds=dim_lower_bound)
+         
+    name = 'fates_hydr_frt_loss_coe'
+    call fates_params%RegisterParameter(name=name, dimension_shape=dimension_shape_1d, &
+         dimension_names=dim_names, lower_bounds=dim_lower_bound)
+         
+    name = 'fates_hydr_frt_loss_exp'
+    call fates_params%RegisterParameter(name=name, dimension_shape=dimension_shape_1d, &
+         dimension_names=dim_names, lower_bounds=dim_lower_bound)
+         
+    name = 'fates_hydr_frt_loss_se0'
+    call fates_params%RegisterParameter(name=name, dimension_shape=dimension_shape_1d, &
+         dimension_names=dim_names, lower_bounds=dim_lower_bound)                                       
 
     name = 'fates_mort_bmort'
     call fates_params%RegisterParameter(name=name, dimension_shape=dimension_shape_1d, &
@@ -802,7 +827,24 @@ contains
     name = 'fates_hydr_k_lwp'
     call fates_params%RetreiveParameterAllocate(name=name, &
          data=this%hydr_k_lwp)
-
+         
+   ! Junyan
+    name = 'fates_hydr_k_salex'
+    call fates_params%RetreiveParameterAllocate(name=name, &
+         data=this%hydr_k_salex)
+         
+    name = 'fates_hydr_frt_loss_coe'
+    call fates_params%RetreiveParameterAllocate(name=name, &
+         data=this%hydr_frt_loss_coe)
+         
+    name = 'fates_hydr_frt_loss_exp'
+    call fates_params%RetreiveParameterAllocate(name=name, &
+         data=this%hydr_frt_loss_exp)         
+                              
+    name = 'fates_hydr_frt_loss_se0'
+    call fates_params%RetreiveParameterAllocate(name=name, &
+         data=this%hydr_frt_loss_se0)  
+         
     name = 'fates_mort_bmort'
     call fates_params%RetreiveParameterAllocate(name=name, &
          data=this%bmort)
@@ -1435,7 +1477,7 @@ contains
         write(fates_log(),fmt0) 'phen_cold_size_threshold = ',EDPftvarcon_inst%phen_cold_size_threshold
         write(fates_log(),fmt0) 'phen_stem_drop_fraction',EDpftvarcon_inst%phen_stem_drop_fraction
         write(fates_log(),fmt0) 'fire_alpha_SH = ',EDPftvarcon_inst%fire_alpha_SH
-	write(fates_log(),fmt0) 'allom_frbstor_repro = ',EDPftvarcon_inst%allom_frbstor_repro
+	      write(fates_log(),fmt0) 'allom_frbstor_repro = ',EDPftvarcon_inst%allom_frbstor_repro
         write(fates_log(),fmt0) 'hydr_p_taper = ',EDPftvarcon_inst%hydr_p_taper
         write(fates_log(),fmt0) 'hydr_rs2 = ',EDPftvarcon_inst%hydr_rs2
         write(fates_log(),fmt0) 'hydr_srl = ',EDPftvarcon_inst%hydr_srl
@@ -1444,6 +1486,10 @@ contains
         write(fates_log(),fmt0) 'hydr_k_lwp = ',EDPftvarcon_inst%hydr_k_lwp
         write(fates_log(),fmt0) 'hydr_p50_gs = ',EDPftvarcon_inst%hydr_p50_gs
         write(fates_log(),fmt0) 'hydr_k_lwp = ',EDPftvarcon_inst%hydr_k_lwp
+        write(fates_log(),fmt0) 'hydr_k_salex = ',EDPftvarcon_inst%hydr_k_salex        
+        write(fates_log(),fmt0) 'hydr_frt_loss_coe = ',EDPftvarcon_inst%hydr_frt_loss_coe
+        write(fates_log(),fmt0) 'hydr_frt_loss_exp = ',EDPftvarcon_inst%hydr_frt_loss_exp
+        write(fates_log(),fmt0) 'hydr_frt_loss_se0 = ',EDPftvarcon_inst%hydr_frt_loss_se0         
         write(fates_log(),fmt0) 'hydr_avuln_node = ',EDPftvarcon_inst%hydr_avuln_node
         write(fates_log(),fmt0) 'hydr_p50_node = ',EDPftvarcon_inst%hydr_p50_node
         write(fates_log(),fmt0) 'hydr_thetas_node = ',EDPftvarcon_inst%hydr_thetas_node

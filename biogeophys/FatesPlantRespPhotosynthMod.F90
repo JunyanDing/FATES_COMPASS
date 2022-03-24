@@ -52,7 +52,8 @@ module FATESPlantRespPhotosynthMod
   use EDParamsMod,       only : ED_val_base_mr_20, stomatal_model
   use PRTParametersMod,  only : prt_params
   use EDPftvarcon         , only : EDPftvarcon_inst
-  
+  use FatesHydraulicsMemMod,  only : useSalinity  
+
   ! CIME Globals
   use shr_log_mod , only      : errMsg => shr_log_errMsg
 
@@ -69,6 +70,7 @@ module FATESPlantRespPhotosynthMod
   real(r8),parameter :: rsmax0 =  2.e8_r8
 
   logical   ::  debug = .false.
+  logical   ::  JD_debug = .true.      ! Junyan 
   !-------------------------------------------------------------------------------------
 
   ! Ratio of H2O/CO2 gas diffusion in stomatal airspace (approximate)
@@ -77,19 +79,28 @@ module FATESPlantRespPhotosynthMod
   ! Ratio of H2O/CO2 gass diffusion in the leaf boundary layer (approximate)
   real(r8),parameter :: h2o_co2_bl_diffuse_ratio = 1.4_r8
 
+  ! Parameter of Vcmax reduction function by salinity, Junyan 
+  ! The values are estimated by fitting a function using BC soil salinity and Vcmax data
+  ! 
+  real(r8),parameter :: sal_m = 0.5_r8
+  real(r8),parameter :: sal_n = 9.4_r8
+  real(r8),parameter :: sal_a = 0.17_r8      
+
   ! Constants used to define C3 versus C4 photosynth pathways
   integer, parameter :: c3_path_index = 1
   integer, parameter :: c4_path_index = 0
 
 
   ! Constants used to define conductance models
-  integer, parameter :: medlyn_model = 2
   integer, parameter :: ballberry_model = 1
+  integer, parameter :: medlyn_model = 2
+  integer, parameter :: ballberry_model2 = 3
+  integer, parameter :: medlyn_model2 = 4    
   
   ! Alternatively, Gross Assimilation can be used to estimate
   ! leaf co2 partial pressure and therefore conductance. The default
   !is to use anet
-  logical, parameter :: use_agross = .false.
+  logical, parameter :: use_agross = .true.
 
 
   
@@ -236,6 +247,7 @@ contains
     real(r8) :: lai_current        ! the LAI in the current leaf layer
     real(r8) :: cumulative_lai     ! the cumulative LAI, top down, to the leaf layer of interest
     real(r8) :: leaf_psi           ! leaf xylem matric potential [MPa] (only meaningful/used w/ hydro)
+    real(r8) :: leaf_sal           ! leaf salinity [PSU] (only meaningful/used w/ hydro)    
     real(r8), allocatable :: rootfr_ft(:,:)  ! Root fractions per depth and PFT
 
     ! -----------------------------------------------------------------------------------
@@ -436,6 +448,8 @@ contains
                                   cumulative_lai    = lai_canopy_above + lai_layers_above + 0.5*lai_current
 
                                   leaf_psi = currentCohort%co_hydr%psi_ag(1)
+                                  leaf_sal = currentCohort%co_hydr%salcon_ag(1)    ! Junyan added
+                                  
                                   
                                else
 
@@ -449,8 +463,9 @@ contains
                                   cumulative_lai = sum(currentPatch%canopy_layer_tlai(1:cl-1))  + &
                                        sum(currentPatch%tlai_profile(cl,ft,1:iv-1)) + &
                                        0.5*currentPatch%tlai_profile(cl,ft,iv)
-
+                                   
                                   leaf_psi = fates_unset_r8
+                                  leaf_sal = fates_unset_r8   ! Junyan added
 
                                end if
 
@@ -528,6 +543,7 @@ contains
                                     nscaler,                            &  ! in
                                     bc_in(s)%t_veg_pa(ifp),             &  ! in
                                     btran_eff,                          &  ! in
+                                    leaf_sal,                           &  ! in 
                                     vcmax_z,                            &  ! out
                                     jmax_z,                             &  ! out
                                     kp_z )                                 ! out
@@ -560,6 +576,7 @@ contains
                                     co2_cpoint,                         &  ! in
                                     lmr_z(iv,ft,cl),                    &  ! in
                                     leaf_psi,                           &  ! in
+                                    leaf_sal,                           &  ! in
                                     bc_in(s)%rb_pa(ifp),                &  ! in  
                                     currentPatch%psn_z(cl,ft,iv),       &  ! out
                                     rs_z(iv,ft,cl),                     &  ! out
@@ -877,6 +894,7 @@ subroutine LeafLayerPhotosynthesis(f_sun_lsl,         &  ! in
      co2_cpoint,        &  ! in
      lmr,               &  ! in
      leaf_psi,          &  ! in
+     leaf_sal,          &  ! in   Junyan added
      rb,                &  ! in
      psn_out,           &  ! out
      rstoma_out,        &  ! out
@@ -934,6 +952,7 @@ subroutine LeafLayerPhotosynthesis(f_sun_lsl,         &  ! in
   real(r8), intent(in) :: co2_cpoint      ! CO2 compensation point (Pa)
   real(r8), intent(in) :: lmr             ! Leaf Maintenance Respiration  (umol CO2/m**2/s)
   real(r8), intent(in) :: leaf_psi        ! Leaf water potential [MPa]
+  real(r8), intent(in) :: leaf_sal        ! Leaf salinity [PSU] (parts per southond , g/kg)  
   real(r8), intent(in) :: rb              ! Boundary Layer resistance of leaf [s/m]
   
   real(r8), intent(out) :: psn_out        ! carbon assimilated in this leaf layer umolC/m2/s
@@ -1001,9 +1020,23 @@ subroutine LeafLayerPhotosynthesis(f_sun_lsl,         &  ! in
   ! empirical curvature parameter for ap photosynthesis co-limitation
   real(r8),parameter :: theta_ip = 0.999_r8
 
-  associate( bb_slope  => EDPftvarcon_inst%bb_slope      ,& ! slope of BB relationship, unitless
-       medlyn_slope=> EDPftvarcon_inst%medlyn_slope          , & ! Slope for Medlyn stomatal conductance model method, the unit is KPa^0.5
-       stomatal_intercept=> EDPftvarcon_inst%stomatal_intercept )  !Unstressed minimum stomatal conductance, the unit is umol/m**2/s
+  real(r8)           ::  bb_slope              ! slope of BB relationship, unitless
+  real(r8)           ::  medlyn_slope          ! Slope for Medlyn stomatal conductance model method, the unit is KPa^0.5
+  real(r8)           ::  stomatal_intercept    !Unstressed minimum stomatal conductance, the unit is umol/m**2/s
+
+  if (stomatal_model == ballberry_model) then  
+       bb_slope  = EDPftvarcon_inst%bb_slope(ft)     
+  else if (stomatal_model == medlyn_model) then     
+       medlyn_slope= EDPftvarcon_inst%medlyn_slope(ft)     
+  else if (stomatal_model == ballberry_model2) then
+      bb_slope  = EDPftvarcon_inst%bb_slope(ft)*btran
+  else if (stomatal_model == medlyn_model2) then
+      medlyn_slope= EDPftvarcon_inst%medlyn_slope(ft)*btran
+      
+  end if      
+            
+  
+  stomatal_intercept= EDPftvarcon_inst%stomatal_intercept(ft)   
 
   ! photosynthetic pathway: 0. = c4, 1. = c3
   c3c4_path_index = nint(EDPftvarcon_inst%c3psn(ft))
@@ -1014,6 +1047,7 @@ subroutine LeafLayerPhotosynthesis(f_sun_lsl,         &  ! in
      init_co2_inter_c = init_a2l_co2_c4 * can_co2_ppress
   end if
 
+  
   ! Part III: Photosynthesis and Conductance
   ! ----------------------------------------------------------------------------------
 
@@ -1146,8 +1180,8 @@ subroutine LeafLayerPhotosynthesis(f_sun_lsl,         &  ! in
 
               if (use_agross) then
                  if ( stomatal_model == medlyn_model ) then
-                    write (fates_log(),*) 'Gross Assimilation conductance is incompatible with the Medlyn model'
-                    call endrun(msg=errMsg(sourcefile, __LINE__))
+                    !write (fates_log(),*) 'Gross Assimilation conductance might not incompatible with the Medlyn model'
+                    !call endrun(msg=errMsg(sourcefile, __LINE__))
                  end if
                  a_gs = agross
               else
@@ -1161,34 +1195,40 @@ subroutine LeafLayerPhotosynthesis(f_sun_lsl,         &  ! in
               leaf_co2_ppress = can_co2_ppress- h2o_co2_bl_diffuse_ratio/gb_mol * a_gs * can_press 		   
               leaf_co2_ppress = max(leaf_co2_ppress,1.e-06_r8)
               
-              if ( stomatal_model == medlyn_model ) then
+              if ( stomatal_model == medlyn_model .or. stomatal_model == medlyn_model2) then
                  !stomatal conductance calculated from Medlyn et al. (2011), the numerical &
                  !implementation was adapted from the equations in CLM5.0
                  vpd =  max((veg_esat - ceair), 50._r8) * 0.001_r8          !addapted from CLM5. Put some constraint on VPD
                  !when Medlyn stomatal conductance is being used, the unit is KPa. Ignoring the constraint will cause errors when model runs.
-                 term = h2o_co2_stoma_diffuse_ratio * anet / (leaf_co2_ppress / can_press)
+                 term = h2o_co2_stoma_diffuse_ratio * a_gs / (leaf_co2_ppress / can_press)
                  aquad = 1.0_r8
-                 bquad = -(2.0 * (stomatal_intercept_btran+ term) + (medlyn_slope(ft) * term)**2 / &
+                 bquad = -(2.0 * (stomatal_intercept_btran+ term) + (medlyn_slope * term)**2 / &
                       (gb_mol * vpd ))
                  cquad = stomatal_intercept_btran*stomatal_intercept_btran + &
                       (2.0*stomatal_intercept_btran + term * &
-                      (1.0 - medlyn_slope(ft)* medlyn_slope(ft) / vpd)) * term
+                      (1.0 - medlyn_slope* medlyn_slope / vpd)) * term
 
                  call quadratic_f (aquad, bquad, cquad, r1, r2)
                  gs_mol = max(r1,r2)
 
-              else if ( stomatal_model == ballberry_model ) then         !stomatal conductance calculated from Ball et al. (1987)
+              else if ( stomatal_model == ballberry_model .or. stomatal_model == ballberry_model2) then         !stomatal conductance calculated from Ball et al. (1987)
                  aquad = leaf_co2_ppress
-                 bquad = leaf_co2_ppress*(gb_mol - stomatal_intercept_btran) - bb_slope(ft) * a_gs * can_press
+                 bquad = leaf_co2_ppress*(gb_mol - stomatal_intercept_btran) - bb_slope * a_gs * can_press
                  cquad = -gb_mol*(leaf_co2_ppress*stomatal_intercept_btran + &
-                      bb_slope(ft)*anet*can_press * ceair/ veg_esat )
-
+                      bb_slope*a_gs*can_press * ceair/ veg_esat )             
+                 
                  call quadratic_f (aquad, bquad, cquad, r1, r2)
                  gs_mol = max(r1,r2)
               end if
               
               ! Derive new estimate for co2_inter_c
-              co2_inter_c = can_co2_ppress - anet * can_press * &
+              if (debug) then
+                write (fates_log(),*)'can_press= ',can_press
+                write (fates_log(),*)'can_co2_ppress= ',can_co2_ppress
+                write (fates_log(),*)'a_gs= ',a_gs
+              end if
+              
+              co2_inter_c = can_co2_ppress - a_gs * can_press * &
                    (h2o_co2_bl_diffuse_ratio*gs_mol+h2o_co2_stoma_diffuse_ratio*gb_mol) / (gb_mol*gs_mol)
 
               ! Check for co2_inter_c convergence. Delta co2_inter_c/pair = mol/mol.
@@ -1205,14 +1245,14 @@ subroutine LeafLayerPhotosynthesis(f_sun_lsl,         &  ! in
            ! End of co2_inter_c iteration.  Check for an < 0, in which case gs_mol = bbb
            ! And Final estimates for leaf_co2_ppress and co2_inter_c 
            ! (needed for early exit of co2_inter_c iteration when an < 0)	 
-           if (anet < 0._r8) then
+           if (a_gs < 0._r8) then
               gs_mol = stomatal_intercept_btran
            end if
 
            ! Final estimates for leaf_co2_ppress and co2_inter_c
-           leaf_co2_ppress = can_co2_ppress - h2o_co2_bl_diffuse_ratio/gb_mol * anet * can_press
+           leaf_co2_ppress = can_co2_ppress - h2o_co2_bl_diffuse_ratio/gb_mol * a_gs * can_press
            leaf_co2_ppress = max(leaf_co2_ppress,1.e-06_r8)
-           co2_inter_c = can_co2_ppress - anet * can_press * &
+           co2_inter_c = can_co2_ppress - a_gs * can_press * &
                 (h2o_co2_bl_diffuse_ratio*gs_mol+h2o_co2_stoma_diffuse_ratio*gb_mol) / (gb_mol*gs_mol)
 
            ! Convert gs_mol (umol /m**2/s) to gs (m/s) and then to rs (s/m)
@@ -1250,12 +1290,12 @@ subroutine LeafLayerPhotosynthesis(f_sun_lsl,         &  ! in
            end if
 
            ! Compare with Medlyn model: gs_mol = 1.6*(1+m/sqrt(vpd)) * an/leaf_co2_ppress*p + b
-           if ( stomatal_model == 2 ) then
-              gs_mol_err = h2o_co2_stoma_diffuse_ratio*(1 + medlyn_slope(ft)/sqrt(vpd))*max(anet,0._r8)/leaf_co2_ppress*can_press + stomatal_intercept_btran
+           if ( stomatal_model == 2 .or. stomatal_model == 4 ) then
+              gs_mol_err = h2o_co2_stoma_diffuse_ratio*(1 + medlyn_slope/sqrt(vpd))*max(a_gs,0._r8)/leaf_co2_ppress*can_press + stomatal_intercept_btran
               ! Compare with Ball-Berry model: gs_mol = m * an * hs/leaf_co2_ppress*p + b
-           else if ( stomatal_model == 1 ) then
+           else if ( stomatal_model == 1 .or. stomatal_model == 3) then
               hs = (gb_mol*ceair + gs_mol* veg_esat ) / ((gb_mol+gs_mol)*veg_esat )
-              gs_mol_err = bb_slope(ft)*max(anet, 0._r8)*hs/leaf_co2_ppress*can_press + stomatal_intercept_btran
+              gs_mol_err = bb_slope*max(a_gs, 0._r8)*hs/leaf_co2_ppress*can_press + stomatal_intercept_btran
            end if
 
            if (abs(gs_mol-gs_mol_err) > 1.e-01_r8) then
@@ -1264,7 +1304,7 @@ subroutine LeafLayerPhotosynthesis(f_sun_lsl,         &  ! in
            end if
 
         enddo !sunsha loop
-
+         
         ! Stomatal resistance of the leaf-layer
         if ( (hlm_use_planthydro.eq.itrue .and. EDPftvarcon_inst%hydr_k_lwp(ft)>nearzero) ) then
            rstoma_out = LeafHumidityStomaResis(leaf_psi, veg_tempk, ceair, can_press, veg_esat, &
@@ -1284,7 +1324,7 @@ subroutine LeafLayerPhotosynthesis(f_sun_lsl,         &  ! in
         psn_out     = 0._r8
         anet_av_out = 0._r8
 
-        rstoma_out  = min(rsmax0,cf/(stem_cuticle_loss_frac*stomatal_intercept(ft)))
+        rstoma_out  = min(rsmax0,cf/(stem_cuticle_loss_frac*stomatal_intercept))
         c13disc_z = 0.0_r8
 
      end if if_leafarea !is there leaf area?
@@ -1292,8 +1332,6 @@ subroutine LeafLayerPhotosynthesis(f_sun_lsl,         &  ! in
 
    end if if_daytime    ! night or day
 
-
-   end associate
    return
 end subroutine LeafLayerPhotosynthesis
 
@@ -1365,10 +1403,11 @@ function LeafHumidityStomaResis(leaf_psi, veg_tempk, ceair, can_press, veg_esat,
   qs = molar_mass_ratio_vapdry * ceair / (can_press - (1._r8-molar_mass_ratio_vapdry) * ceair)
   qsat = molar_mass_ratio_vapdry * veg_esat / (can_press - (1._r8-molar_mass_ratio_vapdry) * veg_esat)
   qsat_adj = qsat*lwp_star
-
+  
+  
   ! Adjusting gs (compute a virtual gs) that will be passed to host model
 
-  if ( qsat_adj < qs ) then
+  if ( qsat_adj <= qs ) then
 
      ! if inner leaf vapor pressure is less then or equal to that at leaf surface
      ! then set stomata resistance to be very large to stop the transpiration or back flow of vapor
@@ -1380,7 +1419,13 @@ function LeafHumidityStomaResis(leaf_psi, veg_tempk, ceair, can_press, veg_esat,
      
   end if
   
+  if (JD_debug) then
+     write (fates_log(),*) 'line 1423'
+     write (fates_log(),*) 'gstoma:', gstoma, 'rstoma_out:', rstoma_out
+     write (fates_log(),*) 'qsat_adj:', qsat_adj, 'qs:', qs  
+  end if 
   if (rstoma_out < nearzero ) then
+     write (fates_log(),*) 'gstoma:', gstoma, 'qsat_adj:', qsat_adj
      write (fates_log(),*) 'qsat:', qsat, 'qs:', qs
      write (fates_log(),*) 'LWP :', leaf_psi
      write (fates_log(),*) 'ceair:', ceair, 'veg_esat:', veg_esat            
@@ -1961,6 +2006,7 @@ subroutine LeafLayerBiophysicalRates( parsun_lsl, &
    nscaler,    &
    veg_tempk,      &
    btran, &
+   leaf_sal, & 
    vcmax, &
    jmax, &
    co2_rcurve_islope )
@@ -1990,11 +2036,12 @@ subroutine LeafLayerBiophysicalRates( parsun_lsl, &
    real(r8), intent(in) :: vcmax25top_ft   ! canopy top maximum rate of carboxylation at 25C
                                              ! for this pft (umol CO2/m**2/s)
    real(r8), intent(in) :: jmax25top_ft    ! canopy top maximum electron transport rate at 25C
-                                             ! for this pft (umol electrons/m**2/s)
+                                             ! for this pft (umol electrons/m**2/s)                                          
    real(r8), intent(in) :: co2_rcurve_islope25top_ft ! initial slope of CO2 response curve
                                              ! (C4 plants) at 25C, canopy top, this pft
    real(r8), intent(in) :: veg_tempk           ! vegetation temperature
    real(r8), intent(in) :: btran           ! transpiration wetness factor (0 to 1)
+   real(r8), intent(in) :: leaf_sal            ! leaf salinity level 
 
    real(r8), intent(out) :: vcmax             ! maximum rate of carboxylation (umol co2/m**2/s)
    real(r8), intent(out) :: jmax              ! maximum electron transport rate
@@ -2011,6 +2058,7 @@ subroutine LeafLayerBiophysicalRates( parsun_lsl, &
                                     ! (C4 plants) at 25C
 
 
+   
    ! Parameters
    ! ---------------------------------------------------------------------------------
    real(r8) :: vcmaxha        ! activation energy for vcmax (J/mol)
@@ -2040,6 +2088,7 @@ subroutine LeafLayerBiophysicalRates( parsun_lsl, &
       co2_rcurve_islope = 0._r8
    else                                     ! day time
 
+
       ! Vcmax25top was already calculated to derive the nscaler function
       vcmax25 = vcmax25top_ft * nscaler
       jmax25  = jmax25top_ft * nscaler
@@ -2048,6 +2097,14 @@ subroutine LeafLayerBiophysicalRates( parsun_lsl, &
       ! Adjust for temperature
       vcmax = vcmax25 * ft1_f(veg_tempk, vcmaxha) * fth_f(veg_tempk, vcmaxhd, vcmaxse, vcmaxc)
       jmax  = jmax25 * ft1_f(veg_tempk, jmaxha) * fth_f(veg_tempk, jmaxhd, jmaxse, jmaxc)
+
+      ! Junyan added to adjust Vcmax by salinity using a signomal equation,
+      ! and constrain the minimum ratio to be 0.1 as from BC observed values
+      if (useSalinity .and.  hlm_use_planthydro.eq.itrue) then
+         vcmax = vcmax * min(0.1, (1-((sal_a*leaf_Sal)**sal_n/(1+(sal_a*leaf_Sal)**sal_n))**sal_m)**2)
+         jmax = jmax * min(0.1,(1-((sal_a*leaf_Sal)**sal_n/(1+(sal_a*leaf_Sal)**sal_n))**sal_m)**2)
+      end if  
+
 
       if (nint(EDPftvarcon_inst%c3psn(ft))  /=  1) then
          vcmax = vcmax25 * 2._r8**((veg_tempk-(tfrz+25._r8))/10._r8)
@@ -2059,8 +2116,12 @@ subroutine LeafLayerBiophysicalRates( parsun_lsl, &
    end if
 
    ! Adjust for water limitations
-   vcmax = vcmax * btran
-
+   ! Junyan modified
+   if (stomatal_model == ballberry_model ) then
+     vcmax = vcmax * btran
+   else if (stomatal_model == medlyn_model ) then
+     vcmax = vcmax * btran  
+   end if 
    return
 end subroutine LeafLayerBiophysicalRates
 

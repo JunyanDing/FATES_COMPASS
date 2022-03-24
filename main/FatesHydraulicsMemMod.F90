@@ -6,12 +6,22 @@ module FatesHydraulicsMemMod
    use FatesConstantsMod, only : itrue,ifalse
    use FatesHydroWTFMod,  only : wrf_arr_type
    use FatesHydroWTFMod,  only : wkf_arr_type
+
+   use clm_time_manager , only : get_days_per_year, &
+                                 get_curr_date,     &
+                                 get_ref_date,      &
+                                 timemgr_datediff,  &
+                                 is_beg_curr_day,   &
+                                 get_step_size,     &
+                                 get_nstep
+  
+
    
    implicit none
    private
 
    logical, parameter, public :: use_2d_hydrosolve = .false.
-   
+   logical, parameter, public :: useSalinity = .true.   
    
    ! Number of soil layers for indexing cohort fine root quanitities
    ! NOTE: The hydraulics code does have some capacity to run a single soil
@@ -64,6 +74,11 @@ module FatesHydraulicsMemMod
 
    ! Should we ignore the first soil layer and have root layers start on the second?
    logical, parameter, public :: ignore_layer1=.true.
+   
+   ! Parameter Junyan added , used to initial the h2osoil_th_mem array, (nlevelsoi, int (num_days_soilth_mem*day_to_second/dtime) )
+   integer, parameter, public :: num_days_soilth_mem = 5                        ! number of days
+   real(r8), parameter, public :: day_to_second = num_days_soilth_mem*24*60*60            ! number of seconds one day have 
+                      
    
    
    ! Derived parameters
@@ -133,8 +148,11 @@ module FatesHydraulicsMemMod
                                                     !  Draw from or add to this pool when
                                                     !  insufficient plant water available to 
                                                     !  support transpiration
-
-
+     ! Junyan added   
+     real(r8) :: soil_salinity                      ! current time soil salinity      [PSU]  , Junyan added
+     real(r8), allocatable :: soil_th_mem(:,:)   ! memory of soil water content by layer [m3/m3] , layer x time 
+     integer            :: soil_th_mem_size         ! the time size of soil water content temporary memory array   
+     
      ! Useful diagnostics
      ! ----------------------------------------------------------------------------------
 
@@ -273,6 +291,15 @@ module FatesHydraulicsMemMod
      real(r8),allocatable :: ftc_aroot(:)         ! ... in the absorbing root [-]
 
 
+     ! Diagnostic, osmotic potential and salt concentration of each plant compartments, Junyan added
+     real(r8) :: salcon_ag(n_hypool_ag)             ! salt concentration in aboveground compartments                       [PSU]
+     real(r8) :: salcon_troot                       ! water potential in belowground compartments                       [PSU]
+     real(r8),allocatable :: salcon_aroot(:)         ! water potential in absorbing roots                                [PSU]
+     real(r8) :: psi_osm_ag(n_hypool_ag)             ! water potential in aboveground compartments                       [MPa]
+     real(r8) :: psi_osm_troot                       ! water potential in belowground compartments                       [MPa]
+     real(r8),allocatable :: psi_osm_aroot(:)         ! water potential in absorbing roots                                [MPa]
+     
+     
      real(r8) ::  btran                           ! leaf water potential limitation on gs                             [0-1]
 
      
@@ -339,7 +366,9 @@ module FatesHydraulicsMemMod
        allocate(this%th_aroot(1:nlevrhiz))
        allocate(this%psi_aroot(1:nlevrhiz))
        allocate(this%ftc_aroot(1:nlevrhiz))
-
+       ! Junyan added 
+       allocate(this%salcon_aroot(1:nlevrhiz))
+       allocate(this%psi_osm_aroot(1:nlevrhiz))       
        return
     end subroutine AllocateHydrCohortArrays
 
@@ -360,7 +389,9 @@ module FatesHydraulicsMemMod
        deallocate(this%th_aroot)
        deallocate(this%psi_aroot)
        deallocate(this%ftc_aroot)
-
+       ! Junyan added 
+       deallocate(this%salcon_aroot)
+       deallocate(this%psi_osm_aroot) 
        return
     end subroutine DeallocateHydrCohortArrays
 
@@ -372,7 +403,13 @@ module FatesHydraulicsMemMod
        class(ed_site_hydr_type),intent(inout) :: this
        integer,intent(in) :: numpft
        integer,intent(in) :: numlevsclass
-
+       integer            :: dtime                   ! Host model time step size [second]
+       integer            :: the_soil_th_mem_size
+       
+       dtime = get_step_size()
+       this%soil_th_mem_size = int(num_days_soilth_mem*day_to_second/dtime)
+       the_soil_th_mem_size = int(num_days_soilth_mem*day_to_second/dtime)
+       
        associate(nlevrhiz => this%nlevrhiz)
 
          allocate(this%zi_rhiz(1:nlevrhiz));  this%zi_rhiz(:)  = nan
@@ -398,6 +435,7 @@ module FatesHydraulicsMemMod
          allocate(this%rootuptake10_scpf(1:numlevsclass,1:numpft))  ; this%rootuptake10_scpf = nan
          allocate(this%rootuptake50_scpf(1:numlevsclass,1:numpft))  ; this%rootuptake50_scpf = nan
          allocate(this%rootuptake100_scpf(1:numlevsclass,1:numpft)) ; this%rootuptake100_scpf = nan
+         allocate(this%soil_th_mem(1:nlevrhiz,the_soil_th_mem_size)) ; this%soil_th_mem = 0  ! Junyan, initialize the temporary memory of 
          
          this%errh2o_hyd     = nan
          this%dwat_veg       = nan
@@ -407,6 +445,8 @@ module FatesHydraulicsMemMod
 
          this%h2oveg_growturn_err = 0.0_r8
          this%h2oveg_hydro_err    = 0.0_r8
+         
+         this%soil_salinity    = 0.0_r8         ! Junyan
          
          ! We have separate water transfer functions and parameters
          ! for each soil layer, and each plant compartment type

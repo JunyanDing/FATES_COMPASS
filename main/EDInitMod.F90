@@ -75,6 +75,11 @@ module EDInitMod
   use PRTGenericMod,          only : phosphorus_element
   use PRTGenericMod,          only : SetState
 
+  ! Junyan added
+  use EDParamsMod,            only : sal_sid
+  use EDParamsMod,            only : sal_fid  
+  use FatesHydraulicsMemMod,  only : useSalinity
+
   ! CIME GLOBALS
   use shr_log_mod               , only : errMsg => shr_log_errMsg
 
@@ -112,8 +117,11 @@ contains
     ! !LOCAL VARIABLES:
     !----------------------------------------------------------------------
     integer :: el
-
-    !
+    
+    
+    !Junyan
+    allocate(site_in%SoilSal(1:365*10)) 
+    
     allocate(site_in%term_nindivs_canopy(1:nlevsclass,1:numpft))
     allocate(site_in%term_nindivs_ustory(1:nlevsclass,1:numpft))
     allocate(site_in%demotion_rate(1:nlevsclass))
@@ -160,8 +168,8 @@ contains
     site_in%zi_soil(:) = bc_in%zi_sisl(:)
     site_in%dz_soil(:) = bc_in%dz_sisl(:)
     site_in%z_soil(:)  = bc_in%z_sisl(:)
-
-    !
+  
+    
   end subroutine init_site_vars
 
   ! ============================================================================
@@ -251,6 +259,9 @@ contains
 
     site_in%area_pft(:) = 0._r8
     site_in%use_this_pft(:) = fates_unset_int
+
+    ! soil salinity, added by Junyan      
+    site_in%SoilSal(:) = 0._r8
   end subroutine zero_site
 
   ! ============================================================================
@@ -267,7 +278,7 @@ contains
     type(bc_in_type), intent(in)               :: bc_in(nsites)
     !
     ! !LOCAL VARIABLES:
-    integer  :: s
+    integer  :: s, io, rid     ! Junyan add io to track file read status
     integer  :: cstat      ! cold status phenology flag
     real(r8) :: GDD
     integer  :: dstat      ! drought status phenology flag
@@ -282,8 +293,12 @@ contains
     integer  :: hlm_pft    ! used in fixed biogeog mode
     integer  :: fates_pft  ! used in fixed biogeog mode
     !----------------------------------------------------------------------
-
-
+    ! Junyan added, set the directory of the salinity file
+    character(len=165) :: SalFDir 
+    character(len=10) :: SalSiteName(4) = (/'BC','CPMS','CPGWI','TEMPEST'/)   
+    character(len=95) :: SalFile, SalFname, tmpstr
+    SalFDir = '/compyfs/ding567/COMPASS/InputData/SalinityFile/'
+    
     ! If this is not a restart, we need to start with some reasonable
     ! starting points. If this is a restart, we leave the values
     ! as unset ints and reals, and let the restart values be read in
@@ -323,6 +338,34 @@ contains
           sites(s)%acc_NI     = acc_NI
           sites(s)%NF         = 0.0_r8
           sites(s)%NF_successful  = 0.0_r8
+
+          sites(s)%SoilSal(:) = 0._r8 
+
+          ! Junyan added, set the directory of the salinity file
+          if (useSalinity) then  
+            write(fates_log(),*) 'sal_fid: ', int(sal_fid)
+            ! Initialize soil salinity 
+            write(tmpstr,'(I3.3)' ) int(sal_fid)
+            SalFname = trim(SalSiteName(sal_sid))//trim(tmpstr)//'.csv'
+            SalFile = trim(SalFDir)//trim(SalFname)
+            
+            write(fates_log(),*) 'Site: ', SalSiteName(sal_sid)
+            write(fates_log(),*) 'tmpstr: ', trim(tmpstr)
+            write(fates_log(),*) 'SalFname: ', SalFname
+            write(fates_log(),*) 'Sal file: ', SalFile    
+            write(fates_log(),*) 'read salinity data'       
+            open (unit=119,file=SalFile)
+            do rid = 1, 3650
+              read(119, *,IOSTAT=io), sites(s)%SoilSal(rid) 
+              write(fates_log(),*) 'rid', rid 
+              if (io > 0) then
+                exit
+              end if
+            end do ! end read salinity file
+            close (119)
+          end if
+          write(fates_log(),*) 'SoilSal', sites(s)%SoilSal(1:30)
+          ! end Junyan
 
           if(hlm_use_fixed_biogeog.eq.itrue)then
              ! MAPPING OF FATES PFTs on to HLM_PFTs
