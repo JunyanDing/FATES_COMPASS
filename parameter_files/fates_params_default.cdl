@@ -278,9 +278,11 @@ variables:
 	double fates_hydr_srl(fates_pft) ;
 		fates_hydr_srl:units = "m g-1" ;
 		fates_hydr_srl:long_name = "specific root length" ;
+
 	double fates_hydr_k_salex(fates_pft) ;
 		fates_hydr_k_salex:units = "fraction" ;
 		fates_hydr_k_salex:long_name = "fraction of total sal exclusion ration 0 - total exclude, 1 - no exclusion" ;
+
 	double fates_hydr_frt_loss_coe(fates_pft) ;
 		fates_hydr_frt_loss_coe:units = "unitless" ;
 		fates_hydr_frt_loss_coe:long_name = "the coefficient of fine root loss function due to anoxia soil condition" ;
@@ -290,6 +292,24 @@ variables:
 	double fates_hydr_frt_loss_se0(fates_pft) ;
 		fates_hydr_frt_loss_se0:units = "unitless" ;
 		fates_hydr_frt_loss_se0:long_name = "the critical relative soil water content fine root mortality start to increase due to anoxia" ;     
+
+	double fates_hydr_frt_loss_salcr(fates_pft) ;
+		fates_hydr_frt_loss_salcr:units = "unitless" ;
+		fates_hydr_frt_loss_salcr:long_name = "the threshold soil salinity level in PSU when " ;     
+	double fates_hydr_frt_loss_salk(fates_pft) ;
+		fates_hydr_frt_loss_salk:units = "unitless" ;
+		fates_hydr_frt_loss_salk:long_name = "the increase rate parameter in soil salinity induced fine root mortality " ;     
+
+	double fates_hydr_vg_dn_sal(fates_pft) ;
+		fates_hydr_vg_dn_sal:units = "unitless" ;
+		fates_hydr_vg_dn_sal:long_name = "rate of change of van Genuchten parameter n with (plant organ)salinity (PSU)" ;     
+	double fates_hydr_vg_da_sal(fates_pft) ;
+		fates_hydr_vg_da_sal:units = "unitless" ;
+		fates_hydr_vg_da_sal:long_name = "rate of change of van Genuchten parameter alpha with (plant organ)salinity (PSU)" ;     
+	double fates_hydr_PSU_vg_init(fates_pft) ;
+		fates_hydr_PSU_vg_init:units = "PSU" ;
+		fates_hydr_PSU_vg_init:long_name = "The PSU corresponding to the original van Genuchten parameters" ;     
+
 	double fates_hydr_thetas_node(fates_hydr_organs, fates_pft) ;
 		fates_hydr_thetas_node:units = "cm3/cm3" ;
 		fates_hydr_thetas_node:long_name = "saturated water content" ;
@@ -558,7 +578,7 @@ variables:
 	double fates_z0mr(fates_pft) ;
 		fates_z0mr:units = "unitless" ;
 		fates_z0mr:long_name = "Ratio of momentum roughness length to canopy top height" ;
-double fates_hlm_pft_map(fates_hlm_pftno, fates_pft) ;
+  double fates_hlm_pft_map(fates_hlm_pftno, fates_pft) ;
     fates_hlm_pft_map:units = "area fraction" ;
     fates_hlm_pft_map:long_name = "In fixed biogeog mode, fraction of HLM area associated with each FATES PFT" ;
 	double fates_fire_FBD(fates_litterclass) ;
@@ -778,6 +798,7 @@ double fates_hlm_pft_map(fates_hlm_pftno, fates_pft) ;
 		fates_sal_fid:units = "unitless" ;
 		fates_sal_fid:long_name = "the number of salinity instance of a given site, used to define salinity input file name " ;
 
+
 // global attributes:
 		:history = "This parameter file is maintained in version control\nSee https://github.com/NGEET/fates/blob/master/parameter_files/fates_params_default.cdl \nFor changes, use git blame \n" ;   
 data:
@@ -988,10 +1009,23 @@ data:
     2.5 ;
 
  fates_hydr_k_salex = 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5 ;
- 
+  
  fates_hydr_frt_loss_coe = 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 ;
  
  fates_hydr_frt_loss_exp = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ;
+
+
+ fates_hydr_frt_loss_sal0 = 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6 ;
+
+ fates_hydr_frt_loss_salk = 0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.0001 ;
+
+ fates_hydr_vg_dn_sal = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ;
+
+ fates_hydr_vg_da_sal = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ;
+
+ fates_hydr_ PSU_vg_init = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ;
+
+
 
  fates_hydr_avuln_node =
   2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,

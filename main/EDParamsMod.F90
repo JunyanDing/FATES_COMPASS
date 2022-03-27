@@ -1,7 +1,7 @@
 module EDParamsMod
 
    !
-   ! module that deals with reading the ED parameter file
+   ! module that deals with reading the ED(site level) parameter file
    !
 
    use FatesConstantsMod, only : r8 => fates_r8

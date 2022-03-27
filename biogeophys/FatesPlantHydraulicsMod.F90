@@ -1759,6 +1759,9 @@ subroutine ConstrainRecruitNumber(csite,ccohort, bc_in)
   !  for newly recruited individuals from the soil
   ! ---------------------------------------------------------------------------
 
+  ! Note Junyan
+  ! Need to constrain recruitment due to salinity in Phase 2
+
   ! Arguments
   type(ed_site_type), intent(inout), target     :: csite
   type(ed_cohort_type) , intent(inout), target  :: ccohort
@@ -2430,6 +2433,7 @@ subroutine hydraulics_bc ( nsites, sites, bc_in, bc_out, dtime)
   ! !LOCAL VARIABLES:
   integer :: iv    ! leaf layer
   integer :: ifp   ! index of FATES patch
+  integer :: numpft ! number of PFTs
   integer :: s     ! index of FATES site
   integer :: i     ! shell index
   integer :: j,jj  ! soil layer
@@ -2488,9 +2492,13 @@ subroutine hydraulics_bc ( nsites, sites, bc_in, bc_out, dtime)
   integer  :: soil_th_mem_size    ! maximum time step for memory of soil saturation condistion of layer     
   integer  :: cum_sat_period(nlevsoi_hyd_max)  = 0 ! store the accumulated time soil water content exceed the threshold
   real(r8) :: kfr_red(nlevsoi_hyd_max)             ! the degree of reduction of root conductance, 1 - no reduction, near zero - total loss of conductance  
-  real(r8) :: fr_red_a, fr_red_cum0, fr_red_exp    ! the parameters for 
+  real(r8) :: fr_red_a, fr_red_cum0, fr_red_exp    ! variable corresponding to saturation root mortality parameters
+  real(r8) :: fr_red_salcr, fr_red_salk            ! variable corresponding to salinity root mortality parameters
   real(r8) :: cur_soil_sal                         ! the current time soil salinity 
-  
+  real(r8) :: kfr_red_sat(nlevsoi_hyd_max)         ! reduction of root conductance by saturation
+  real(r8) :: kfr_red_sal(nlevsoi_hyd_max)         ! reduction of root conductance by salinity
+  real(r8) :: acc_sal(nlevsoi_hyd_max) = 0         ! the accumulation term of salinity
+    
                      
 
   ! ----------------------------------------------------------------------------------
@@ -2504,6 +2512,9 @@ subroutine hydraulics_bc ( nsites, sites, bc_in, bc_out, dtime)
   !For newly recruited cohorts, add the water uptake demand to csite_hydr%recruit_w_uptake
   call RecruitWUptake(nsites,sites,bc_in,dtime,recruitflag)
 
+  ! obtain the number of pft by getting the array size of a pft parameter 
+  ! here the freezetol is used, can also use other parameters
+  numpft = size(EDPftvarcon_inst%freezetol,1)  
   !update water storage in veg after incorporating newly recuited cohorts
     if(recruitflag)then
        do s = 1, nsites
@@ -2521,9 +2532,10 @@ subroutine hydraulics_bc ( nsites, sites, bc_in, bc_out, dtime)
      nlevrhiz = site_hydr%nlevrhiz
 
      ! Junyan added,      
+     ! get the root and 
      soil_th_mem_size = site_hydr%soil_th_mem_size
      fr_red_cum0 = soil_th_mem_size/2                 ! set the default values for these, can be PFT parameters    
-     fr_red_a = 1                                  ! kfr_red = 1/(1 + a*exp (fr_red_exp *(cum_sat_period - soil_th_mem_size/2 )))    
+     fr_red_a = 1                                  ! kfr_red_sat = 1/(1 + a*exp (fr_red_exp *(cum_sat_period - soil_th_mem_size/2 )))    
      fr_red_exp = 10/soil_th_mem_size      
                  
      cur_soil_sal = 0        
@@ -2534,13 +2546,28 @@ subroutine hydraulics_bc ( nsites, sites, bc_in, bc_out, dtime)
      soil_Psi_osm = Sal2Psi_osm * cur_soil_sal             ! Junyan added, 
 
      ! Junyan added, remember the past 5 day soil water content for each layer
-     !
+     ! calculate cumulative salinity
      do j = 1,nlevrhiz 
+       ! remember the past 5 day soil water content for each layer
        site_hydr%soil_th_mem(j,2:soil_th_mem_size) = site_hydr%soil_th_mem (j,1:soil_th_mem_size-1)
-       site_hydr%soil_th_mem(j,1) = bc_in(s)%h2o_liqvol_sl(j)
+       site_hydr%soil_th_mem(j,1) = bc_in(s)%h2o_liqvol_sl(j)      
      end do 
 
-     
+     ! cumulative salinity effect , Junyan added Mar 26
+     if (site_hydr%current_day < hlm_model_day) then
+       ! loop through PFT
+       do ift = 1, numpft
+         ! loop through soil layer
+         do j=,nlevrhiz
+            site_hydr%acc_sal_slpf(j,ipft)=max(0,site_hydr%acc_sal_slpf(j,ipft)+ &
+                                           (cur_soil_sal-EDPftvarcon_inst%hydr_frt_loss_salcr(ift)))
+         end ! done soil layer     
+       end ! done pft
+              
+       site_hydr%current_day=hlm_model_day
+     end
+
+
      ! bc_in(s)%watsat_sl(:)  [m3/m3] saturated soil water content
 
     
@@ -2612,6 +2639,11 @@ subroutine hydraulics_bc ( nsites, sites, bc_in, bc_out, dtime)
               ft       = ccohort%pft
 
               ! Junyan added, set plant organ salinity for pft x cohort
+              ! read pft parameters for calculating root mortality and adjustment of VG parameters
+              fr_red_salcr = EDPftvarcon_inst%hydr_frt_loss_salcr(ft)
+              fr_red_salk = EDPftvarcon_inst%hydr_frt_loss_salk(ft)
+              
+              
               if (useSalinity) then
                  
                  ccohort_hydr%salcon_aroot(:) = cur_soil_sal*EDPftvarcon_inst%hydr_k_salex(ft) 
@@ -2630,20 +2662,35 @@ subroutine hydraulics_bc ( nsites, sites, bc_in, bc_out, dtime)
                  end if      
               end if               
               
+              
               ! Junyan, reduction of root conductance
+              ! kfr_red = kfr_red_sat * kfr_red_sal
               ! 1) calculate the duration when a given layer water content > threshold
-              ! 2) calculate the % loss of root conductivity              
+              ! 2) calculate the % loss of root conductivity       
+              ! 
+                     
               cum_sat_period(:) = 0
               kfr_red(:) = 1  ! initialize to be no reduction
+              kfr_red_sat(:) = 1
+              kfr_red_sal(:) = 1
               do j = 1,nlevrhiz
+                ! calculate saturation root conductance loss
                 do it = 1,soil_th_mem_size
                 
                    if  ((bc_in(s)%h2o_liqvol_sl(j)/bc_in(s)%watsat_sl(j)) > (0.9 *bc_in(s)%watsat_sl(j)))  then
                        cum_sat_period(j) = cum_sat_period(j) + 1
                    end if                
+                                                
                 end do ! loop of time step
-                ! calculating reduction ratio
-                kfr_red(j) = 1/(1 + fr_red_a*exp (fr_red_exp *(cum_sat_period(j) - soil_th_mem_size/2 )))
+                
+               ! calculating reduction ratio
+                kfr_red_sat(j) = 1/(1 + fr_red_a*exp (fr_red_exp *(cum_sat_period(j) - soil_th_mem_size/2 )))
+
+               ! calculate salinity induced root coductance loss  site_hydr%acc_sal_slpf(j,ipft)
+               kfr_red_sal(j) = exp(-fr_red_salk*site_hydr%acc_sal_slpf(j,ft))
+               
+               ! calculate the total reduction 
+               kfr_red=kfr_red_sat(j)*kfr_red_sal(j)
 
                 if (JD_debug) then
                    write(fates_log(),*) 'Check root conductance reduction due to saturation L2637'
