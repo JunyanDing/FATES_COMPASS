@@ -152,7 +152,7 @@ module FatesHydraulicsMemMod
      real(r8) :: soil_salinity                      ! current time soil salinity      [PSU]  , Junyan added
      real(r8), allocatable :: soil_th_mem(:,:)   ! memory of soil water content by layer [m3/m3] , layer x time 
      integer            :: soil_th_mem_size         ! the time size of soil water content temporary memory array   
-     real(r8) :: acc_sal_slpf(:,:)                      ! cumulative salinity effect for layer x PFT [PSU] 
+     real(r8), allocatable :: acc_sal_slpf(:,:)                      ! cumulative salinity effect for layer x PFT [PSU] 
      integer  :: current_day                        ! current day since model initiation, used to track salinity effect accumulation 
      
      ! Useful diagnostics
@@ -438,7 +438,7 @@ module FatesHydraulicsMemMod
          allocate(this%rootuptake50_scpf(1:numlevsclass,1:numpft))  ; this%rootuptake50_scpf = nan
          allocate(this%rootuptake100_scpf(1:numlevsclass,1:numpft)) ; this%rootuptake100_scpf = nan
          allocate(this%soil_th_mem(1:nlevrhiz,the_soil_th_mem_size)) ; this%soil_th_mem = 0  ! Junyan, initialize the temporary memory of 
-         allocate(this%acc_sal_slpf(1:nlevrhiz,1:numpft) ; this%acc_sal_pf = 0  ! Junyan, initialize the temporary memory of 
+         allocate(this%acc_sal_slpf(1:nlevrhiz,1:numpft)) ; this%acc_sal_slpf = 0.0_r8  ! Junyan, initialize the cumulative salinity effct to be 0 
          
          this%errh2o_hyd     = nan
          this%dwat_veg       = nan

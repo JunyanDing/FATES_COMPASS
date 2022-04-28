@@ -64,7 +64,7 @@ contains
     integer  :: ifp
     real(r8) :: frac  ! relativised stored carbohydrate
     real(r8) :: leaf_c_target      ! target leaf biomass kgC
-    real(r8) :: store_c
+    real(r8) :: store_c            ! 
     real(r8) :: hf_sm_threshold    ! hydraulic failure soil moisture threshold 
     real(r8) :: hf_flc_threshold   ! hydraulic failure fractional loss of conductivity threshold
     real(r8) :: mort_ip_size_senescence ! inflection point for increase in mortality with dbh 
@@ -136,6 +136,7 @@ if (hlm_use_ed_prescribed_phys .eq. ifalse) then
      if(flc >= hf_flc_threshold .and. hf_flc_threshold < 1.0_r8 )then 
        hmort = (flc-hf_flc_threshold)/(1.0_r8-hf_flc_threshold) * &
            EDPftvarcon_inst%mort_scalar_hydrfailure(cohort_in%pft)
+           ! ort_scalar_hydrfailure(cohort_in%pft) is the maximum mortality rate of hydraulic failure
      else
        hmort = 0.0_r8
      endif      

@@ -192,7 +192,7 @@ module FatesPlantHydraulicsMod
   ! is left between soil moisture and saturation [m3/m3]
   ! (if we are going to help purge super-saturation)
 
-  logical,parameter :: debug = .false.          ! flag to report warning in hydro
+  logical,parameter :: debug = .true.          ! flag to report warning in hydro
 
 
   real(r8) :: Sal2Psi_osm = -0.068  ! Junyan added, covert soil salinity to osmotic potential,  
@@ -2433,6 +2433,8 @@ subroutine hydraulics_bc ( nsites, sites, bc_in, bc_out, dtime)
   ! !LOCAL VARIABLES:
   integer :: iv    ! leaf layer
   integer :: ifp   ! index of FATES patch
+  integer :: ift   ! index of FATES pft
+  integer :: pm    ! index of plant media
   integer :: numpft ! number of PFTs
   integer :: s     ! index of FATES site
   integer :: i     ! shell index
@@ -2444,6 +2446,7 @@ subroutine hydraulics_bc ( nsites, sites, bc_in, bc_out, dtime)
   integer :: t     ! previous timesteps (for lwp stability calculation)
   integer :: nstep ! number of time steps
   integer :: it    ! indes of time step for saturation condition
+
   !----------------------------------------------------------------------
 
   type (ed_patch_type),  pointer     :: cpatch       ! current patch pointer
@@ -2498,8 +2501,14 @@ subroutine hydraulics_bc ( nsites, sites, bc_in, bc_out, dtime)
   real(r8) :: kfr_red_sat(nlevsoi_hyd_max)         ! reduction of root conductance by saturation
   real(r8) :: kfr_red_sal(nlevsoi_hyd_max)         ! reduction of root conductance by salinity
   real(r8) :: acc_sal(nlevsoi_hyd_max) = 0         ! the accumulation term of salinity
-    
-                     
+  real(r8) :: cur_n       ! current value of VG parameter n
+  real(r8) :: cur_alpha   ! current value of VG parameter alpha    
+  real(r8) :: VG_K        ! the hiden parameter of VG model, k=m+1/n
+  real(r8) :: cur_m       ! current value of VG parameter m 
+  real(r8) :: org_n       ! original value of VG parameter n
+  real(r8) :: org_alpha   ! original VG parameter alpha                        
+  real(r8) :: ini_PSU     ! the PSU matches the original P-K curve
+  
 
   ! ----------------------------------------------------------------------------------
   ! Important note: We are interested in calculating the total fluxes in and out of the
@@ -2556,16 +2565,16 @@ subroutine hydraulics_bc ( nsites, sites, bc_in, bc_out, dtime)
      ! cumulative salinity effect , Junyan added Mar 26
      if (site_hydr%current_day < hlm_model_day) then
        ! loop through PFT
-       do ift = 1, numpft
+       do ft = 1, numpft
          ! loop through soil layer
-         do j=,nlevrhiz
-            site_hydr%acc_sal_slpf(j,ipft)=max(0,site_hydr%acc_sal_slpf(j,ipft)+ &
-                                           (cur_soil_sal-EDPftvarcon_inst%hydr_frt_loss_salcr(ift)))
-         end ! done soil layer     
-       end ! done pft
+         do j=1,nlevrhiz
+            site_hydr%acc_sal_slpf(j,ft)=max(0._r8,(site_hydr%acc_sal_slpf(j,ft)+ &
+                                           (cur_soil_sal-EDPftvarcon_inst%hydr_frt_loss_salcr(ft))))
+         end do! done soil layer     
+       end do! done pft
               
        site_hydr%current_day=hlm_model_day
-     end
+     end if
 
 
      ! bc_in(s)%watsat_sl(:)  [m3/m3] saturated soil water content
@@ -2652,7 +2661,39 @@ subroutine hydraulics_bc ( nsites, sites, bc_in, bc_out, dtime)
                  
                  ccohort_hydr%psi_osm_aroot(:) = Sal2Psi_osm * ccohort_hydr%salcon_aroot(:) 
                  ccohort_hydr%psi_osm_troot = Sal2Psi_osm * ccohort_hydr%salcon_troot
-                 ccohort_hydr%psi_osm_ag(:) = Sal2Psi_osm * ccohort_hydr%salcon_ag(:)          
+                 ccohort_hydr%psi_osm_ag(:) = Sal2Psi_osm * ccohort_hydr%salcon_ag(:)   
+                 
+                 ! adjust vg parameters n,alpha with organ salinity PSU except stoma
+                 do pm = 1, n_plant_media
+
+                        org_n = EDPftvarcon_inst%hydr_vg_n_node(ft,pm)
+                        org_alpha  =EDPftvarcon_inst%hydr_vg_alpha_node(ft,pm)
+                        VG_K = EDPftvarcon_inst%hydr_vg_m_node(ft,pm) + 1/org_n
+                        cur_n = EXP(LOG(org_n)+EDPftvarcon_inst%hydr_vg_dn_sal(ft)* & 
+                                 (cur_soil_sal*EDPftvarcon_inst%hydr_k_salex(ft) - & 
+                                  EDPftvarcon_inst%hydr_PSU_vg_init(ft)))
+                        cur_alpha = org_alpha + EDPftvarcon_inst%hydr_vg_da_sal(ft)* & 
+                                    (cur_soil_sal*EDPftvarcon_inst%hydr_k_salex(ft) - EDPftvarcon_inst%hydr_PSU_vg_init(ft)) 
+                        cur_m = VG_K - 1/cur_n
+                         
+                        call wrf_plant(pm,ft)%p%set_wrf_param([cur_alpha, &
+                                                   cur_n, &
+                                                   cur_m, &
+                                                   EDPftvarcon_inst%hydr_thetas_node(ft,pm), &
+                                                   EDPftvarcon_inst%hydr_resid_node(ft,pm)])
+
+                                                  
+                        call wkf_plant(pm,ft)%p%set_wkf_param([cur_alpha, &
+                                       cur_n, &
+                                       cur_m, &
+                                       EDPftvarcon_inst%hydr_thetas_node(ft,pm), &
+                                       EDPftvarcon_inst%hydr_resid_node(ft,pm), &
+                                       plant_tort_vg])                           
+                                                   
+                        
+
+                 end do ! adjust VG parameters
+                                        
                  if (JD_debug) then
                    write(fates_log(),*) 'the clm day ',hlm_model_day
                    write(fates_log(),*) 'cur_soil_sal: ', cur_soil_sal

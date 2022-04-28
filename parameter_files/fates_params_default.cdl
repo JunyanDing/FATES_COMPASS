@@ -1015,7 +1015,7 @@ data:
  fates_hydr_frt_loss_exp = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ;
 
 
- fates_hydr_frt_loss_sal0 = 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6 ;
+ fates_hydr_frt_loss_salcr = 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6 ;
 
  fates_hydr_frt_loss_salk = 0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.0001 ;
 
@@ -1023,7 +1023,7 @@ data:
 
  fates_hydr_vg_da_sal = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ;
 
- fates_hydr_ PSU_vg_init = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ;
+ fates_hydr_PSU_vg_init = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ;
 
 
 

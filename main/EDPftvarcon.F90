@@ -87,7 +87,7 @@ module EDPftvarcon
      real(r8), allocatable :: mort_r_age_senescence(:) ! rate of change in mortality with age
      real(r8), allocatable :: mort_scalar_coldstress(:)
      real(r8), allocatable :: mort_scalar_cstarvation(:)
-     real(r8), allocatable :: mort_scalar_hydrfailure(:)
+     real(r8), allocatable :: mort_scalar_hydrfailure(:)  
      real(r8), allocatable :: hf_sm_threshold(:)
      real(r8), allocatable :: hf_flc_threshold(:)
      real(r8), allocatable :: vcmaxha(:)
