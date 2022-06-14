@@ -194,7 +194,8 @@ module FatesPlantHydraulicsMod
 
   logical,parameter :: debug = .true.          ! flag to report warning in hydro
 
-
+  
+  real(r8), parameter :: Eff_rec_soil_layer = 5 ! Junyan added, set the effective soil layer for recruitment
   real(r8) :: Sal2Psi_osm = -0.068  ! Junyan added, covert soil salinity to osmotic potential,  
                                     ! the ratio -0.2 is a guess and need to be replace by a physical term 
                                     ! to link PSU to salt concentration to osmotic potential e.g. P = RT(∆C)
@@ -921,12 +922,15 @@ contains
     integer  :: nlevrhiz                     ! number of rhizosphere levels
     real(r8) :: dbh                          ! the dbh of current cohort                                             [cm]   
     real(r8) :: z_fr                         ! rooting depth of a cohort                                             [cm]
+    real(r8) :: v_leaf_donate(1:n_hypool_leaf)   ! the volume that leaf will donate to xylem
     
     ! We allow the transporting root to donate a fraction of its volume to the absorbing
     ! roots to help mitigate numerical issues due to very small volumes. This is the
     ! fraction the transporting roots donate to those layers
     real(r8), parameter :: t2aroot_vol_donate_frac = 0.65_r8
-
+    real(r8), parameter :: l2sap_vol_donate_frac = 0.5_r8   ! Junyan added
+    
+    
     real(r8), parameter :: min_leaf_frac = 0.1_r8   ! Fraction of maximum leaf carbon that
     ! we set as our lower cap on leaf volume
     real(r8), parameter :: min_trim      = 0.1_r8   ! The lower cap on trimming function used
@@ -941,7 +945,7 @@ contains
     struct_c     = ccohort%prt%GetState(struct_organ, carbon12_element)
     roota        = prt_params%fnrt_prof_a(ft)
     rootb        = prt_params%fnrt_prof_b(ft)
-
+    v_leaf_donate(1:n_hypool_leaf) = 0    
 
     
     ! Leaf Volumes
@@ -1003,8 +1007,16 @@ contains
     crown_depth  = min(ccohort%hite,0.1_r8)
     z_stem       = ccohort%hite - crown_depth
     v_sapwood    = a_sapwood * z_stem    ! + 0.333_r8*a_sapwood*crown_depth
-    ccohort_hydr%v_ag(n_hypool_leaf+1:n_hypool_ag) = v_sapwood / n_hypool_stem
-
+    
+    ! Junyan changed the following code to calculate the above ground node volume
+    ! foliage donate half of its water volume to xylem for grass
+    if (prt_params%woody(ft)==1) then
+      ccohort_hydr%v_ag(n_hypool_leaf+1:n_hypool_ag) = v_sapwood / n_hypool_stem  ! original code
+    else
+      v_leaf_donate(1:n_hypool_leaf) = ccohort_hydr%v_ag(1:n_hypool_leaf) / l2sap_vol_donate_frac
+      ccohort_hydr%v_ag(1:n_hypool_leaf) = ccohort_hydr%v_ag(1:n_hypool_leaf) - v_leaf_donate(1:n_hypool_leaf)
+      ccohort_hydr%v_ag(n_hypool_leaf+1:n_hypool_ag) = (v_sapwood + sum(v_leaf_donate(1:n_hypool_leaf))) / n_hypool_stem
+    end if 
 
     ! Determine belowground biomass as a function of total (sapwood, heartwood,
     ! leaf, fine root) biomass then subtract out the fine root biomass to get
@@ -1759,7 +1771,7 @@ subroutine ConstrainRecruitNumber(csite,ccohort, bc_in)
   !  for newly recruited individuals from the soil
   ! ---------------------------------------------------------------------------
 
-  ! Note Junyan
+  ! Note by Junyan: 
   ! Need to constrain recruitment due to salinity in Phase 2
 
   ! Arguments
@@ -1799,8 +1811,11 @@ subroutine ConstrainRecruitNumber(csite,ccohort, bc_in)
      csite_hydr%cohort_recruit_water_layer(j) = recruitw*ccohort_hydr%l_aroot_layer(j)/sum_l_aroot
   end do
 
-  do j=1,csite_hydr%nlevrhiz
-
+  ! this is not right to use water storage for all the soil layers for recruitment
+  ! because recruitement should only use surface soil moisture
+  ! so change 
+  !do j=1,csite_hydr%nlevrhiz
+   do j=1,Eff_rec_soil_layer
      watres_local = csite_hydr%wrf_soil(j)%p%th_from_psi(bc_in%smpmin_si*denh2o*grav_earth*m_per_mm*mpa_per_pa)
      
      total_water = sum(csite_hydr%v_shell(j,:)*csite_hydr%h2osoi_liqvol_shell(j,:))
@@ -3321,7 +3336,9 @@ subroutine OrderLayersForSolve1D(site_hydr,cohort,cohort_hydr,ordered, kbg_layer
         ! Special case. Maximum conductance depends on the
         ! potential gradient (same elevation, no geopotential
         ! required.
-
+        !write(fates_log(),*) 'layer', j, '  pft:', ft
+        !write(fates_log(),*) 'inner shell theta ', site_hydr%h2osoi_liqvol_shell(j,1)
+        
         psi_inner_shell = site_hydr%wrf_soil(j)%p%psi_from_th(site_hydr%h2osoi_liqvol_shell(j,1))
 
         ! Note, since their is no elevation difference between
@@ -3353,6 +3370,9 @@ subroutine OrderLayersForSolve1D(site_hydr,cohort,cohort_hydr,ordered, kbg_layer
            kmax_up = site_hydr%kmax_upper_shell(j,k)*aroot_frac_plant
            kmax_lo = site_hydr%kmax_lower_shell(j,k)*aroot_frac_plant
 
+           !write(fates_log(),*) 'layer:' , j, ' shell: ', k
+           !write(fates_log(),*) 'water content:' , site_hydr%h2osoi_liqvol_shell(j,k)
+           !write(fates_log(),*) 'pft ', ft
            psi_shell = site_hydr%wrf_soil(j)%p%psi_from_th(site_hydr%h2osoi_liqvol_shell(j,k))
 
            ftc_shell = site_hydr%wkf_soil(j)%p%ftc_from_psi(psi_shell)

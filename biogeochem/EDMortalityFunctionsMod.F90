@@ -19,6 +19,7 @@ module EDMortalityFunctionsMod
    use FatesInterfaceTypesMod     , only : hlm_use_planthydro
    use EDLoggingMortalityMod , only : LoggingMortality_frac
    use EDParamsMod           , only : fates_mortality_disturbance_fraction
+  use PRTParametersMod , only    : prt_params
 
    use PRTGenericMod,          only : all_carbon_elements
    use PRTGenericMod,          only : store_organ
@@ -64,7 +65,10 @@ contains
     integer  :: ifp
     real(r8) :: frac  ! relativised stored carbohydrate
     real(r8) :: leaf_c_target      ! target leaf biomass kgC
+    real(r8) :: store_c_target     ! target storage carbon biomass kgC  
     real(r8) :: store_c            ! 
+    real(r8) :: cmort_flsc_threshold   ! Junyan added: threshold of the fractional loss of 
+                                       ! targeted storage carbon that c starvation mortality occurs (a pft parameter) 
     real(r8) :: hf_sm_threshold    ! hydraulic failure soil moisture threshold 
     real(r8) :: hf_flc_threshold   ! hydraulic failure fractional loss of conductivity threshold
     real(r8) :: mort_ip_size_senescence ! inflection point for increase in mortality with dbh 
@@ -152,12 +156,18 @@ if (hlm_use_ed_prescribed_phys .eq. ifalse) then
     if ( cohort_in%dbh  >  0._r8 ) then
 
        call bleaf(cohort_in%dbh,cohort_in%pft,cohort_in%canopy_trim,leaf_c_target)
-       store_c = cohort_in%prt%GetState(store_organ,all_carbon_elements)
+       store_c = cohort_in%prt%GetState(store_organ,all_carbon_elements)  !Junyan added
 
-       call storage_fraction_of_target(leaf_c_target, store_c, frac)
-       if( frac .lt. 1._r8) then
+       store_c_target=leaf_c_target * prt_params%cushion(cohort_in%pft)
+       ! Junyan changed cmort routine
+       ! the carbon starvation mortality is determined by the fraction of storage carbon to target storage carbon ratio
+       ! the target storage carbon is given by the ratio to leaf biomass
+       call storage_fraction_of_target(store_c_target, store_c, frac)
+       cmort_flsc_threshold = EDPftvarcon_inst%mort_flsc_threshold_cstarvation(cohort_in%pft)
+
+       if( frac .lt. cmort_flsc_threshold) then
           cmort = max(0.0_r8,EDPftvarcon_inst%mort_scalar_cstarvation(cohort_in%pft) * &
-               (1.0_r8 - frac))
+               (cmort_flsc_threshold - frac))
        else
           cmort = 0.0_r8
        endif

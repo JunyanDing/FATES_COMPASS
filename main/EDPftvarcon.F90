@@ -87,6 +87,7 @@ module EDPftvarcon
      real(r8), allocatable :: mort_r_age_senescence(:) ! rate of change in mortality with age
      real(r8), allocatable :: mort_scalar_coldstress(:)
      real(r8), allocatable :: mort_scalar_cstarvation(:)
+     real(r8), allocatable :: mort_flsc_threshold_cstarvation(:)
      real(r8), allocatable :: mort_scalar_hydrfailure(:)  
      real(r8), allocatable :: hf_sm_threshold(:)
      real(r8), allocatable :: hf_flc_threshold(:)
@@ -210,7 +211,11 @@ module EDPftvarcon
      real(r8), allocatable :: hydr_vg_da_sal(:)         ! rate of change of VG curve parameter a with PSU
      real(r8), allocatable :: hydr_PSU_vg_init(:)       ! PSU that associated with the original VG parameters (m,n,alpha) given in paramter file
      
+     real(r8), allocatable :: hydr_vcmax_loss_sal_a(:)     ! vcmax salinity ruduction function parameter a 
+     real(r8), allocatable :: hydr_vcmax_loss_sal_m(:)     ! vcmax salinity ruduction function parameter m    
+     real(r8), allocatable :: hydr_vcmax_loss_sal_n(:)     ! vcmax salinity ruduction function parameter n     
      
+      
      ! PFT x Organ Dimension  (organs are: 1=leaf, 2=stem, 3=transporting root, 4=absorbing root)
      ! ----------------------------------------------------------------------------------
 
@@ -517,6 +522,18 @@ contains
          dimension_names=dim_names, lower_bounds=dim_lower_bound) 
 
 
+    name = 'fates_hydr_vcmax_loss_sal_a'
+    call fates_params%RegisterParameter(name=name, dimension_shape=dimension_shape_1d, &
+         dimension_names=dim_names, lower_bounds=dim_lower_bound)
+         
+    name = 'fates_hydr_vcmax_loss_sal_m'
+    call fates_params%RegisterParameter(name=name, dimension_shape=dimension_shape_1d, &
+         dimension_names=dim_names, lower_bounds=dim_lower_bound) 
+
+    name = 'fates_hydr_vcmax_loss_sal_n'
+    call fates_params%RegisterParameter(name=name, dimension_shape=dimension_shape_1d, &
+         dimension_names=dim_names, lower_bounds=dim_lower_bound) 
+
 
     name = 'fates_mort_bmort'
     call fates_params%RegisterParameter(name=name, dimension_shape=dimension_shape_1d, &
@@ -545,6 +562,10 @@ contains
     name = 'fates_mort_scalar_cstarvation'
     call fates_params%RegisterParameter(name=name, dimension_shape=dimension_shape_1d, &
          dimension_names=dim_names, lower_bounds=dim_lower_bound)
+         
+    name = 'fates_mort_flsc_threshold_cstarvation'
+    call fates_params%RegisterParameter(name=name, dimension_shape=dimension_shape_1d, &
+         dimension_names=dim_names, lower_bounds=dim_lower_bound)         
 
     name = 'fates_mort_scalar_hydrfailure'
     call fates_params%RegisterParameter(name=name, dimension_shape=dimension_shape_1d, &
@@ -877,25 +898,35 @@ contains
     call fates_params%RetreiveParameterAllocate(name=name, &
          data=this%hydr_frt_loss_salcr)
          
+    name = 'fates_hydr_frt_loss_salk'
+    call fates_params%RetreiveParameterAllocate(name=name, &
+         data=this%hydr_frt_loss_salk)         
+         
     name = 'fates_hydr_vg_dn_sal'
     call fates_params%RetreiveParameterAllocate(name=name, &
          data=this%hydr_vg_dn_sal)
          
     name = 'fates_hydr_vg_da_sal'
     call fates_params%RetreiveParameterAllocate(name=name, &
-         data=this%hydr_vg_da_sal)         
-                              
+         data=this%hydr_vg_da_sal)  
+
     name = 'fates_hydr_PSU_vg_init'
     call fates_params%RetreiveParameterAllocate(name=name, &
          data=this%hydr_PSU_vg_init)  
-
-    name = 'fates_hydr_frt_loss_salk'
+         
+         
+    name = 'fates_hydr_vcmax_loss_sal_a'
     call fates_params%RetreiveParameterAllocate(name=name, &
-         data=this%hydr_frt_loss_salk) 
+         data=this%hydr_vcmax_loss_sal_a)         
+                              
+    name = 'fates_hydr_vcmax_loss_sal_m'
+    call fates_params%RetreiveParameterAllocate(name=name, &
+         data=this%hydr_vcmax_loss_sal_m)  
 
-
-
-
+    name = 'fates_hydr_vcmax_loss_sal_n'
+    call fates_params%RetreiveParameterAllocate(name=name, &
+         data=this%hydr_vcmax_loss_sal_n) 
+       
 
     name = 'fates_mort_bmort'
     call fates_params%RetreiveParameterAllocate(name=name, &
@@ -908,6 +939,10 @@ contains
     name = 'fates_mort_scalar_cstarvation'
     call fates_params%RetreiveParameterAllocate(name=name, &
          data=this%mort_scalar_cstarvation)
+
+    name = 'fates_mort_flsc_threshold_cstarvation'
+    call fates_params%RetreiveParameterAllocate(name=name, &
+         data=this%mort_flsc_threshold_cstarvation)
 
     name = 'fates_mort_scalar_hydrfailure'
     call fates_params%RetreiveParameterAllocate(name=name, &
@@ -938,6 +973,9 @@ contains
     call fates_params%RetreiveParameterAllocate(name=name, &
          data=this%mort_scalar_cstarvation)
 
+    name = 'fates_mort_flsc_threshold_cstarvation'
+    call fates_params%RetreiveParameterAllocate(name=name, &
+         data=this%mort_flsc_threshold_cstarvation)
 
     name = 'fates_mort_hf_sm_threshold'
     call fates_params%RetreiveParameterAllocate(name=name, &
@@ -1508,6 +1546,8 @@ contains
         write(fates_log(),fmt0) 'mort_r_age_senescence = ', EDPftvarcon_inst%mort_r_age_senescence
         write(fates_log(),fmt0) 'mort_scalar_coldstress = ',EDPftvarcon_inst%mort_scalar_coldstress
         write(fates_log(),fmt0) 'mort_scalar_cstarvation = ',EDPftvarcon_inst%mort_scalar_cstarvation
+        write(fates_log(),fmt0) 'mort_flsc_threshold_cstarvation = ',EDPftvarcon_inst%mort_flsc_threshold_cstarvation
+               
         write(fates_log(),fmt0) 'mort_scalar_hydrfailure = ',EDPftvarcon_inst%mort_scalar_hydrfailure
         write(fates_log(),fmt0) 'hf_sm_threshold = ',EDPftvarcon_inst%hf_sm_threshold
         write(fates_log(),fmt0) 'hf_flc_threshold = ',EDPftvarcon_inst%hf_flc_threshold
@@ -1549,7 +1589,10 @@ contains
         write(fates_log(),fmt0) 'hydr_vg_da_sal = ',EDPftvarcon_inst%hydr_vg_da_sal 
         write(fates_log(),fmt0) 'hydr_PSU_vg_init = ',EDPftvarcon_inst%hydr_PSU_vg_init 
         
-                
+        write(fates_log(),fmt0) 'hydr_vcmax_loss_sal_a = ',EDPftvarcon_inst%hydr_vcmax_loss_sal_a 
+        write(fates_log(),fmt0) 'hydr_vcmax_loss_sal_m = ',EDPftvarcon_inst%hydr_vcmax_loss_sal_m 
+        write(fates_log(),fmt0) 'hydr_vcmax_loss_sal_n = ',EDPftvarcon_inst%hydr_vcmax_loss_sal_n        
+                        
         write(fates_log(),fmt0) 'hydr_avuln_node = ',EDPftvarcon_inst%hydr_avuln_node
         write(fates_log(),fmt0) 'hydr_p50_node = ',EDPftvarcon_inst%hydr_p50_node
         write(fates_log(),fmt0) 'hydr_thetas_node = ',EDPftvarcon_inst%hydr_thetas_node

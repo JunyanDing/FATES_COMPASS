@@ -82,9 +82,9 @@ module FATESPlantRespPhotosynthMod
   ! Parameter of Vcmax reduction function by salinity, Junyan 
   ! The values are estimated by fitting a function using BC soil salinity and Vcmax data
   ! 
-  real(r8),parameter :: sal_m = 0.5_r8
-  real(r8),parameter :: sal_n = 9.4_r8
-  real(r8),parameter :: sal_a = 0.17_r8      
+  real(r8) :: sal_m != 0.5_r8
+  real(r8) :: sal_n != 9.4_r8
+  real(r8) :: sal_a != 0.17_r8      
 
   ! Constants used to define C3 versus C4 photosynth pathways
   integer, parameter :: c3_path_index = 1
@@ -2081,7 +2081,12 @@ subroutine LeafLayerBiophysicalRates( parsun_lsl, &
 
    vcmaxc = fth25_f(vcmaxhd, vcmaxse)
    jmaxc  = fth25_f(jmaxhd, jmaxse)
-
+   
+   ! Junyan added
+   sal_a = EDPftvarcon_inst%hydr_vcmax_loss_sal_a(FT)
+   sal_n = EDPftvarcon_inst%hydr_vcmax_loss_sal_n(FT)
+   sal_m = EDPftvarcon_inst%hydr_vcmax_loss_sal_m(FT)
+   
    if ( parsun_lsl <= 0._r8) then           ! night time
       vcmax             = 0._r8
       jmax              = 0._r8
@@ -2101,8 +2106,8 @@ subroutine LeafLayerBiophysicalRates( parsun_lsl, &
       ! Junyan added to adjust Vcmax by salinity using a signomal equation,
       ! and constrain the minimum ratio to be 0.1 as from BC observed values
       if (useSalinity .and.  hlm_use_planthydro.eq.itrue) then
-         vcmax = vcmax * min(0.1, (1-((sal_a*leaf_Sal)**sal_n/(1+(sal_a*leaf_Sal)**sal_n))**sal_m)**2)
-         jmax = jmax * min(0.1,(1-((sal_a*leaf_Sal)**sal_n/(1+(sal_a*leaf_Sal)**sal_n))**sal_m)**2)
+         vcmax = vcmax * max(0.05, (1-((sal_a*leaf_Sal)**sal_n/(1+(sal_a*leaf_Sal)**sal_n))**sal_m)**2)
+         jmax = jmax * max(0.05,(1-((sal_a*leaf_Sal)**sal_n/(1+(sal_a*leaf_Sal)**sal_n))**sal_m)**2)
       end if  
 
 
