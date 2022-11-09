@@ -792,7 +792,7 @@ contains
     endif
 
     !GDD accumulation function, which also depends on chilling days.
-    !  -68 + 638 * (-0.001 * ncd)
+    !  -68 + 638 * exp( * ncd)
     gdd_threshold = ED_val_phen_a + ED_val_phen_b*exp(ED_val_phen_c*real(currentSite%nchilldays,r8))
 
     !Accumulate temperature of last 10 days.
@@ -869,7 +869,8 @@ contains
     if ( (currentSite%cstatus == phen_cstat_iscold .or. &
          currentSite%cstatus == phen_cstat_nevercold) .and. &
          (currentSite%grow_deg_days > gdd_threshold) .and. &
-         (dayssincecleafoff > ED_val_phen_mindayson) .and. &
+!         (dayssincecleafoff > ED_val_phen_mindayson) .and. &   Junyan commented this line cause force leaf off 
+         ((hlm_day_of_year.gt.45) .and. (hlm_day_of_year.lt.180)) .and. &  ! don't grow leaf before Feb 15th. or after June.
          (currentSite%nchilldays >= 1)) then
        currentSite%cstatus = phen_cstat_notcold  ! Set to not-cold status (leaves can come on)
        currentSite%cleafondate = model_day_int
@@ -1810,7 +1811,8 @@ contains
     !
     ! !USES:
     use FatesInterfaceTypesMod, only : hlm_use_ed_prescribed_phys
-    !
+    use FatesConstantsMod, only : pi => pi_const
+    use FatesConstantsMod, only : ha_per_m2
     ! !ARGUMENTS
     type(ed_site_type), intent(inout), target   :: currentSite
     type(ed_patch_type), intent(inout), pointer :: currentPatch
@@ -1819,7 +1821,7 @@ contains
     ! !LOCAL VARIABLES:
     class(prt_vartypes), pointer :: prt
     integer :: ft
-    type (ed_cohort_type) , pointer :: temp_cohort
+    type (ed_cohort_type) , pointer :: temp_cohort, ccohort
     type (litter_type), pointer     :: litt          ! The litter object (carbon right now)
     type(site_massbal_type), pointer :: site_mass    ! For accounting total in-out mass fluxes
     integer :: cohortstatus
@@ -1848,14 +1850,35 @@ contains
     ! of all the organs in the recruits. Used for both [kg per plant] and [kg per cohort]
     real(r8) :: stem_drop_fraction
 
+    real(r8) :: rec_max_act   ! actuall maximum stand density for recruitment      [n/ha] Junyan added
+    real(r8) :: tba_tree      ! total basal area of all the trees per ha in the patch [ha/ha]  
+    real(r8) :: n_grass       ! total number of individual of grass per ha [n/ha]      
     !----------------------------------------------------------------------
 
     allocate(temp_cohort) ! create temporary cohort
     call zero_cohort(temp_cohort)
 
-
+    ! Junyan added
+    ! calculate total basal area of trees and total n of grass for current patch
+    tba_tree = 0.0_r8
+    n_grass = 0.0_r8
+    ccohort => currentPatch%shortest
+    do while(associated(ccohort))
+         ! calculate total basal area of trees
+         if (prt_params%woody(ccohort%pft)==1 ) then
+            ! dbh is in cm, convert to m then convert ba in m^2 to ha
+            tba_tree = tba_tree + ( pi * ((ccohort%dbh/200) ** 2 ) * ha_per_m2)* ccohort%n 
+         endif
+         
+         if (prt_params%woody(ccohort%pft)==0 ) then
+           n_grass = n_grass + ccohort%n
+         endif
+         ccohort => ccohort%taller
+    enddo
+    ! end Junyan addition
+    
     do ft = 1,numpft
-
+       rec_max_act =  EDPftvarcon_inst%max_rec(ft)
        ! The following if block is for the prescribed biogeography and/or nocomp modes.
        ! Since currentSite%use_this_pft is a site-level quantity and thus only limits whether a given PFT
        ! is permitted on a given gridcell or not, it applies to the prescribed biogeography case only.
@@ -1975,9 +1998,17 @@ contains
 
                 ! ------------------------------------------------------------------------
                 ! Update number density if this is the limiting mass
+                ! Junyan midified the following code to adding the contrain of space on recruitment
                 ! ------------------------------------------------------------------------
 
-                temp_cohort%n = min(temp_cohort%n, mass_avail/mass_demand)
+                ! temp_cohort%n = min(temp_cohort%n, mass_avail/mass_demand)  
+                ! tried 2.5 , current use 4.0 
+                if (prt_params%woody(ft)==0) then
+                   rec_max_act = (  max(0._r8, (1 - 4.0_r8 * tba_tree)) * EDPftvarcon_inst%max_rec(ft) - n_grass)
+                else
+                
+                endif  
+                temp_cohort%n = min(temp_cohort%n, mass_avail/mass_demand, rec_max_act)
 
              end do
 
@@ -2094,7 +2125,7 @@ contains
 
              call prt%CheckInitialConditions()
              ! This initializes the cohort
-             call create_cohort(currentSite,currentPatch, temp_cohort%pft, temp_cohort%n, &
+             call create_cohort(currentSite,currentPatch, temp_cohort, temp_cohort%pft, temp_cohort%n, &
                   temp_cohort%hite, temp_cohort%coage, temp_cohort%dbh, prt, &
                   temp_cohort%laimemory, temp_cohort%sapwmemory, temp_cohort%structmemory, &
                   cohortstatus, recruitstatus, &

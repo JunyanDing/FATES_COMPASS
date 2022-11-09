@@ -107,7 +107,8 @@ module FatesAllometryMod
   public :: bagw_allom    ! Generic AGWB (above grnd. woody bio) wrapper
   public :: blmax_allom   ! Generic maximum leaf biomass wrapper
   public :: bleaf         ! Generic actual leaf biomass wrapper
-  public :: storage_fraction_of_target ! storage as fraction of leaf biomass
+  public :: storage_fraction_of_target ! storage as fraction of leaf or aboveground woody biomass
+                                       ! depends on the mode   
   public :: tree_lai      ! Calculate tree-level LAI from actual leaf biomass
   public :: tree_sai      ! Calculate tree-level SAI from tree-level LAI
   public :: bsap_allom    ! Generic sapwood wrapper
@@ -1029,7 +1030,7 @@ contains
           call bleaf(d,ipft,canopy_trim,bl,dbldd)
           call bstore_blcushion(d,bl,dbldd,cushion,ipft,bstore,dbstoredd)
           
-      case(2) ! Junyan added, storage is constant proportional to above ground woody biomass
+       case(2) ! Junyan added, storage is constant proportional to above ground woody biomass
                ! agbw + bgbw
           call bagw_allom(d,ipft,bagw,dbagwdd)
           call bstore_agwcushion(d,bagw,dbagwdd,cushion,ipft,bstore,dbstoredd)

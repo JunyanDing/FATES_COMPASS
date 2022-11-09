@@ -2,8 +2,8 @@ module EDPftvarcon
 
   !-----------------------------------------------------------------------
   ! !DESCRIPTION:
-  ! Module containing vegetation constants and method to
-  ! read and initialize vegetation (PFT) constants.
+  ! Module containing vegetation parameters/constants and method to
+  ! read and initialize vegetation (PFT) parameters.
   !
   ! !USES:
   use EDTypesMod  ,   only : maxSWb, ivis, inir
@@ -100,6 +100,7 @@ module EDPftvarcon
      real(r8), allocatable :: germination_rate(:)        ! Fraction of seed mass germinating per year (yr-1)
      real(r8), allocatable :: seed_decay_rate(:)         ! Fraction of seed mass (both germinated and
                                                          ! ungerminated), decaying per year    (yr-1)
+     real(r8), allocatable :: max_rec(:)                 ! Maximum recruitmet  (n/ha)            Junyan 
 
      real(r8), allocatable :: trim_limit(:)              ! Limit to reductions in leaf area w stress (m2/m2)
      real(r8), allocatable :: trim_inc(:)                ! Incremental change in trimming function   (m2/m2)
@@ -611,6 +612,10 @@ contains
     call fates_params%RegisterParameter(name=name, dimension_shape=dimension_shape_1d, &
          dimension_names=dim_names, lower_bounds=dim_lower_bound)
 
+    name = 'fates_max_rec'
+    call fates_params%RegisterParameter(name=name, dimension_shape=dimension_shape_1d, &
+         dimension_names=dim_names, lower_bounds=dim_lower_bound)
+
     name = 'fates_trim_limit'
     call fates_params%RegisterParameter(name=name, dimension_shape=dimension_shape_1d, &
           dimension_names=dim_names, lower_bounds=dim_lower_bound)
@@ -1016,6 +1021,11 @@ contains
     name = 'fates_seed_decay_rate'
     call fates_params%RetreiveParameterAllocate(name=name, &
          data=this%seed_decay_rate)
+         
+    name = 'fates_max_rec'
+    call fates_params%RetreiveParameterAllocate(name=name, &
+         data=this%max_rec)
+          
 
     name = 'fates_trim_limit'
     call fates_params%RetreiveParameterAllocate(name=name, &
@@ -1559,6 +1569,7 @@ contains
         write(fates_log(),fmt0) 'jmaxse = ',EDPftvarcon_inst%jmaxse
         write(fates_log(),fmt0) 'germination_timescale = ',EDPftvarcon_inst%germination_rate
         write(fates_log(),fmt0) 'seed_decay_turnover = ',EDPftvarcon_inst%seed_decay_rate
+        write(fates_log(),fmt0) 'max_rec=', EDPftvarcon_inst%max_rec
         write(fates_log(),fmt0) 'trim_limit = ',EDPftvarcon_inst%trim_limit
         write(fates_log(),fmt0) 'trim_inc = ',EDPftvarcon_inst%trim_inc
         write(fates_log(),fmt0) 'rhol = ',EDPftvarcon_inst%rhol

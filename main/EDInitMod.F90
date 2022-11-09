@@ -39,6 +39,7 @@ module EDInitMod
   use EDTypesMod                , only : phen_dstat_moistoff
   use EDTypesMod                , only : phen_cstat_notcold
   use EDTypesMod                , only : phen_dstat_moiston
+  use EDTypesMod                , only : SalFileSize           ! Junyan added
   use FatesInterfaceTypesMod         , only : bc_in_type,bc_out_type
   use FatesInterfaceTypesMod         , only : hlm_use_planthydro
   use FatesInterfaceTypesMod         , only : hlm_use_inventory_init
@@ -120,7 +121,7 @@ contains
     
     
     !Junyan
-    allocate(site_in%SoilSal(1:365*10)) 
+    allocate(site_in%SoilSal(1:SalFileSize)) 
     
     allocate(site_in%term_nindivs_canopy(1:nlevsclass,1:numpft))
     allocate(site_in%term_nindivs_ustory(1:nlevsclass,1:numpft))
@@ -355,7 +356,7 @@ contains
             write(fates_log(),*) 'Sal file: ', SalFile    
             write(fates_log(),*) 'read salinity data'       
             open (unit=119,file=SalFile)
-            do rid = 1, 3650
+            do rid = 1, SalFileSize
               read(119, *,IOSTAT=io), sites(s)%SoilSal(rid) 
               write(fates_log(),*) 'rid', rid 
               if (io > 0) then
@@ -928,7 +929,7 @@ contains
 
              call prt_obj%CheckInitialConditions()
 
-             call create_cohort(site_in, patch_in, pft, temp_cohort%n, temp_cohort%hite, &
+             call create_cohort(site_in, patch_in, temp_cohort, pft, temp_cohort%n, temp_cohort%hite, &
                   temp_cohort%coage, temp_cohort%dbh, prt_obj, temp_cohort%laimemory, &
                   temp_cohort%sapwmemory, temp_cohort%structmemory, cstatus, rstatus,        &
                   temp_cohort%canopy_trim, temp_cohort%c_area,1, site_in%spread, bc_in)

@@ -5710,13 +5710,13 @@ end subroutine update_history_hifrq
           avgflag='A', vtype=site_size_r8, hlms='CLM:ALM', flushval=0.0_r8,    &
           upfreq=1, ivar=ivar, initialize=initialize_variables, index = ih_mortality_understory_si_scls )
 
-    call this%set_history_var(vname='TRIMMING_CANOPY_SCLS', units = 'indiv/ha',               &
-          long='trimming term of canopy plants by size class', use_default='inactive',   &
+    call this%set_history_var(vname='TRIMMING_CANOPY_SCLS', units = 'm2/ha',               &
+          long='leaf trimming of canopy plants by size class', use_default='inactive',   &
           avgflag='A', vtype=site_size_r8, hlms='CLM:ALM', flushval=0.0_r8,    &
           upfreq=1, ivar=ivar, initialize=initialize_variables, index = ih_trimming_canopy_si_scls )
 
-    call this%set_history_var(vname='TRIMMING_UNDERSTORY_SCLS', units = 'indiv/ha',               &
-          long='trimming term of understory plants by size class', use_default='inactive',   &
+    call this%set_history_var(vname='TRIMMING_UNDERSTORY_SCLS', units = 'm2/ha',               &
+          long='leaf trimming of understory plants by size class', use_default='inactive',   &
           avgflag='A', vtype=site_size_r8, hlms='CLM:ALM', flushval=0.0_r8,    &
           upfreq=1, ivar=ivar, initialize=initialize_variables, index = ih_trimming_understory_si_scls )
 

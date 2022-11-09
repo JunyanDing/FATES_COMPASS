@@ -156,9 +156,12 @@ if (hlm_use_ed_prescribed_phys .eq. ifalse) then
     if ( cohort_in%dbh  >  0._r8 ) then
 
        call bleaf(cohort_in%dbh,cohort_in%pft,cohort_in%canopy_trim,leaf_c_target)
+        
        store_c = cohort_in%prt%GetState(store_organ,all_carbon_elements)  !Junyan added
 
-       store_c_target=leaf_c_target * prt_params%cushion(cohort_in%pft)
+          store_c_target=leaf_c_target * prt_params%cushion(cohort_in%pft)
+          
+          
        ! Junyan changed cmort routine
        ! the carbon starvation mortality is determined by the fraction of storage carbon to target storage carbon ratio
        ! the target storage carbon is given by the ratio to leaf biomass
@@ -168,6 +171,12 @@ if (hlm_use_ed_prescribed_phys .eq. ifalse) then
        if( frac .lt. cmort_flsc_threshold) then
           cmort = max(0.0_r8,EDPftvarcon_inst%mort_scalar_cstarvation(cohort_in%pft) * &
                (cmort_flsc_threshold - frac))
+               
+          ! Junyan changed cmort formula to make it non-linear
+          ! 
+          cmort = max(0.0_r8,EDPftvarcon_inst%mort_scalar_cstarvation(cohort_in%pft) * &
+               (cmort_flsc_threshold - frac))
+               
        else
           cmort = 0.0_r8
        endif

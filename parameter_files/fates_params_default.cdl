@@ -310,6 +310,10 @@ variables:
 		fates_hydr_PSU_vg_init:units = "PSU" ;
 		fates_hydr_PSU_vg_init:long_name = "The PSU corresponding to the original van Genuchten parameters" ;     
 
+	double fates_max_rec(fates_pft) ;
+		fates_max_rec:units = "n/ha" ;
+		fates_max_rec:long_name = "maximum recruitment" ;     
+
 	double fates_hydr_vcmax_loss_sal_a(fates_pft) ;
 		fates_hydr_vcmax_loss_sal_a:units = "unitless" ;
 		fates_hydr_vcmax_loss_sal_a:long_name = "The vcmax salinity ruduction function parameter a" ;     
@@ -1032,13 +1036,15 @@ data:
 
  fates_hydr_frt_loss_salcr = 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6 ;
 
- fates_hydr_frt_loss_salk = 0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.0001, 0.0001 ;
+ fates_hydr_frt_loss_salk = 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001 ;
 
  fates_hydr_vg_dn_sal = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ;
 
  fates_hydr_vg_da_sal = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ;
-
+ 
  fates_hydr_PSU_vg_init = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ;
+
+ fates_max_rec = 40000, 40000, 40000, 40000, 40000, 40000, 40000, 40000, 400000, 400000, 400000, 400000 ;
 
  fates_hydr_vcmax_loss_sal_a = 0.17, 0.17, 0.17, 0.17, 0.17, 0.17, 0.17, 0.17, 0.17, 0.17, 0.17, 0.17 ;
  
@@ -1409,8 +1415,8 @@ data:
 
  fates_turnover_retrans_mode = 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 ;
 
- fates_wood_density = 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7,
-    0.7 ;
+ fates_wood_density = 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.1, 0.1,
+    0.1 ;
 
  fates_woody = 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0 ;
 

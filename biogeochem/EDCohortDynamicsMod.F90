@@ -143,7 +143,7 @@ contains
 
 
 
-  subroutine create_cohort(currentSite, patchptr, pft, nn, hite, coage, dbh,   &
+  subroutine create_cohort(currentSite, patchptr, thechr,pft, nn, hite, coage, dbh,   &
                            prt, laimemory, sapwmemory, structmemory, &
                            status, recruitstatus,ctrim, carea, clayer, spread, bc_in)
     !
@@ -163,6 +163,7 @@ contains
 
     type(ed_site_type), intent(inout),   target :: currentSite
     type(ed_patch_type), intent(inout), pointer :: patchptr
+    type(ed_cohort_type), intent(inout), pointer :: thechr
 
     integer,  intent(in)      :: pft              ! Cohort Plant Functional Type
     integer,  intent(in)      :: clayer           ! canopy status of cohort
@@ -171,7 +172,7 @@ contains
                                                   ! (2 = leaves on , 1 = leaves off)
     integer,  intent(in)      :: recruitstatus    ! recruit status of plant
                                                   ! (1 = recruitment , 0 = other)
-    real(r8), intent(in)      :: nn               ! number of individuals in cohort
+    real(r8), intent(inout)   :: nn               ! number of individuals in cohort
                                                   ! per 'area' (10000m2 default)
     real(r8), intent(in)      :: hite             ! height: meters
     real(r8), intent(in)      :: coage            ! cohort age in years
@@ -356,7 +357,12 @@ contains
        endif
 
     endif
-
+    
+    ! write(fates_log(),*) 'JD added EDCohortDynamic L361'
+    ! write(fates_log(),*) 'new_cohort%n' , new_cohort%n
+    
+    thechr%n=new_cohort%n    ! Junyan added to update recruitement number
+    
     call insert_cohort(new_cohort, patchptr%tallest, patchptr%shortest, tnull, snull, &
          storebigcohort, storesmallcohort)
 
@@ -1314,7 +1320,7 @@ contains
                                         currentCohort%size_class,currentCohort%size_by_pft_class)
 
 
-                                   if(hlm_use_planthydro.eq.itrue) then
+                                   if( (hlm_use_planthydro.eq.itrue) .and. (newn > nearzero)) then
                                       call FuseCohortHydraulics(currentSite,currentCohort,nextc,bc_in,newn)
                                    endif
 
