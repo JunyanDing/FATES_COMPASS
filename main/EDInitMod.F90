@@ -121,7 +121,7 @@ contains
     
     
     !Junyan
-    allocate(site_in%SoilSal(1:SalFileSize)) 
+    allocate(site_in%SoilSal(1:SalFileSize,1:2)) 
     
     allocate(site_in%term_nindivs_canopy(1:nlevsclass,1:numpft))
     allocate(site_in%term_nindivs_ustory(1:nlevsclass,1:numpft))
@@ -204,6 +204,12 @@ contains
     site_in%cleafoffdate     = fates_unset_int  ! doy of leaf off
     site_in%dleafondate      = fates_unset_int  ! doy of leaf on drought
     site_in%dleafoffdate     = fates_unset_int  ! doy of leaf on drought
+    site_in%dayssincedleafon      = fates_unset_int  ! days since leaf on 
+    site_in%dayssincedleafoff     = fates_unset_int  ! days since leaf off
+    site_in%dayssincecleafon      = fates_unset_int  ! days since leaf on 
+    site_in%dayssincecleafoff     = fates_unset_int  ! days since leaf off
+    
+    
     site_in%water_memory(:)  = nan
     site_in%vegtemp_memory(:) = nan              ! record of last 10 days temperature for senescence model.
 
@@ -262,7 +268,7 @@ contains
     site_in%use_this_pft(:) = fates_unset_int
 
     ! soil salinity, added by Junyan      
-    site_in%SoilSal(:) = 0._r8
+    site_in%SoilSal(:,:) = 0._r8
   end subroutine zero_site
 
   ! ============================================================================
@@ -289,6 +295,7 @@ contains
     integer  :: cleafoff   ! DOY for cold-decid leaf-off, initial guess
     integer  :: dleafoff   ! DOY for drought-decid leaf-off, initial guess
     integer  :: dleafon    ! DOY for drought-decid leaf-on, initial guess
+   
     integer  :: ft         ! PFT loop
     real(r8) :: sumarea    ! area of PFTs in nocomp mode.
     integer  :: hlm_pft    ! used in fixed biogeog mode
@@ -296,7 +303,7 @@ contains
     !----------------------------------------------------------------------
     ! Junyan added, set the directory of the salinity file
     character(len=165) :: SalFDir 
-    character(len=10) :: SalSiteName(4) = (/'BC','CPMS','CPGWI','TEMPEST'/)   
+    character(len=10) :: SalSiteName(5) = (/'BC','CPMS','CPGWI','TEMPEST','LE'/)   
     character(len=95) :: SalFile, SalFname, tmpstr
     SalFDir = '/compyfs/ding567/COMPASS/InputData/SalinityFile/'
     
@@ -318,11 +325,15 @@ contains
        watermem = 0.5_r8
 
        do s = 1,nsites
+       
+          ! recalculated in phenology immediately, so yes this
+          ! is memory-less, but needed for first value in history file       
           sites(s)%nchilldays    = 0
-          sites(s)%ncolddays     = 0        ! recalculated in phenology
-          ! immediately, so yes this
-          ! is memory-less, but needed
-          ! for first value in history file
+          sites(s)%ncolddays     = 0        
+          sites(s)%dayssincedleafon    = 0         ! Junyan
+          sites(s)%dayssincedleafoff     = 0        !Junyan
+          sites(s)%dayssincecleafon    = 0         ! Junyan
+          sites(s)%dayssincecleafoff     = 0        !Junyan
 
           sites(s)%cleafondate   = cleafon
           sites(s)%cleafoffdate  = cleafoff
@@ -340,7 +351,9 @@ contains
           sites(s)%NF         = 0.0_r8
           sites(s)%NF_successful  = 0.0_r8
 
-          sites(s)%SoilSal(:) = 0._r8 
+          sites(s)%SoilSal(:,1) = 0._r8 ! default soil alinity
+          sites(s)%SoilSal(:,2) = 9._r8 ! default water table depth          
+          
 
           ! Junyan added, set the directory of the salinity file
           if (useSalinity) then  
@@ -357,7 +370,7 @@ contains
             write(fates_log(),*) 'read salinity data'       
             open (unit=119,file=SalFile)
             do rid = 1, SalFileSize
-              read(119, *,IOSTAT=io), sites(s)%SoilSal(rid) 
+              read(119, *,IOSTAT=io), sites(s)%SoilSal(rid,1), sites(s)%SoilSal(rid,2)
               write(fates_log(),*) 'rid', rid 
               if (io > 0) then
                 exit
@@ -365,7 +378,7 @@ contains
             end do ! end read salinity file
             close (119)
           end if
-          write(fates_log(),*) 'SoilSal', sites(s)%SoilSal(1:30)
+          write(fates_log(),*) 'SoilSal', sites(s)%SoilSal(1:30,1:2)
           ! end Junyan
 
           if(hlm_use_fixed_biogeog.eq.itrue)then

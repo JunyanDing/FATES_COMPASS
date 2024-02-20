@@ -436,16 +436,147 @@ contains
      if ( int(prt_params%turnover_retrans_mode(ipft)) == 1 ) then
         call DeciduousTurnoverSimpleRetranslocation(prt,ipft,organ_id,mass_fraction)
      else
-        write(fates_log(),*) 'A retranslocation mode was specified for deciduous drop'
-        write(fates_log(),*) 'that is unknown.'
-        write(fates_log(),*) 'turnover_retrans_mode= ',prt_params%turnover_retrans_mode(ipft)
-        write(fates_log(),*) 'pft = ',ipft
-        call endrun(msg=errMsg(__FILE__, __LINE__))
+        ! Junyan added a 2nd mode to trim leaf gradually
+        if ( int(prt_params%turnover_retrans_mode(ipft)) == 2 ) then
+          call DeciduousTurnoverSimpleRetranslocation2(prt,ipft,organ_id,mass_fraction)
+        else
+          write(fates_log(),*) 'A retranslocation mode was specified for deciduous drop'
+          write(fates_log(),*) 'that is unknown.'
+          write(fates_log(),*) 'turnover_retrans_mode= ',prt_params%turnover_retrans_mode(ipft)
+          write(fates_log(),*) 'pft = ',ipft
+          call endrun(msg=errMsg(__FILE__, __LINE__))
+        end if
      end if
      
      return
    end subroutine PRTDeciduousTurnover
    
+   ! ====================================================================================
+
+   subroutine DeciduousTurnoverSimpleRetranslocation2(prt,ipft,organ_id,mass_fraction)
+
+     ! ---------------------------------------------------------------------------------
+     ! Calculate losses due to deciduous turnover.
+     ! the turnover of tissues in living plants (non-mortal)
+     !
+     ! ALERT: NO CODE IS CURRENTLY IN PLACE TO LIMIT THE AMOUNT OF CARBON OR NUTRIENT
+     ! CAN BE RE-TRANSLOCATED INTO STORAGE. IT IS POSSIBLE THAT THE MAXIMUM IS BEING
+     ! OVER-SHOT.  TO FIX THIS, EACH HYPOTHESIS NEEDS TO HAVE WRAPPER CODE
+     ! TO PROVIDE A WAY TO CALCULATE MAXIMUM ALLOWABLE STORAGE.
+     !
+     ! ---------------------------------------------------------------------------------
+
+     class(prt_vartypes) :: prt
+     integer,intent(in)  :: ipft
+     integer,intent(in)  :: organ_id            ! see PRTGenericMod for organ list
+     real(r8),intent(in) :: mass_fraction       ! The fraction of mass in this organ that should
+                                                ! leave the indicated organ.
+
+     integer             :: i_var               ! index for the variable of interest 
+     integer             :: i_var_of_organ      ! loop counter for all element in this organ
+     integer             :: element_id          ! Element id of the turnover pool
+     integer             :: store_var_id        ! Variable id of the storage pool
+     integer             :: i_store_pos         ! Position index for storage
+     integer             :: i_pos               ! position index (spatial)
+     real(r8)            :: retrans             ! retranslocated fraction 
+     real(r8)            :: turnover_mass       ! mass sent to turnover (leaves the plant)
+     real(r8)            :: retranslocated_mass ! mass redistributed to storage
+     
+
+     associate(organ_map => prt_global%organ_map)
+
+       if((organ_id == store_organ) .or. &
+          (organ_id == struct_organ) .or. & 
+          (organ_id == sapw_organ)) then	   
+           
+          if (prt_params%woody(ipft) == itrue) then        
+              write(fates_log(),*) 'Deciduous turnover (leaf drop, etc)'
+              write(fates_log(),*) ' was specified for an unexpected organ'
+              write(fates_log(),*) ' organ: ',organ_id
+              write(fates_log(),*) 'Exiting'
+              call endrun(msg=errMsg(__FILE__, __LINE__))        
+          end if
+	  
+       end if
+
+       if(prt_global%hyp_id .le. 2) then
+          i_store_pos = 1             ! hypothesis 1&2 only have
+                                      ! 1 storage pool
+       else
+          write(fates_log(),*) 'You picked a hypothesis that has not defined'
+          write(fates_log(),*) ' how and where flushing interacts'
+          write(fates_log(),*) ' with the storage pool. specifically, '
+          write(fates_log(),*) ' if this hypothesis has multiple storage pools'
+          write(fates_log(),*) ' to pull carbon/resources from'
+          write(fates_log(),*) 'Exiting'
+          call endrun(msg=errMsg(__FILE__, __LINE__))
+       end if
+
+       do i_var_of_organ = 1, organ_map(organ_id)%num_vars
+          
+          i_var = organ_map(organ_id)%var_id(i_var_of_organ)
+          
+          element_id = prt_global%state_descriptor(i_var)%element_id
+         
+          if( prt_params%organ_param_id(organ_id) < 1 ) then
+             retrans = 0._r8
+          else
+             if ( any(element_id == carbon_elements_list) ) then
+                retrans = prt_params%turnover_carb_retrans(ipft,prt_params%organ_param_id(organ_id))
+             else if( element_id == nitrogen_element ) then
+                retrans = prt_params%turnover_nitr_retrans(ipft,prt_params%organ_param_id(organ_id))
+             else if( element_id == phosphorus_element ) then
+                retrans = prt_params%turnover_phos_retrans(ipft,prt_params%organ_param_id(organ_id))
+             else
+                write(fates_log(),*) 'Please add a new re-translocation clause to your '
+                write(fates_log(),*) ' organ x element combination'
+                write(fates_log(),*) ' organ: ',leaf_organ,' element: ',element_id
+                write(fates_log(),*) 'Exiting'
+                call endrun(msg=errMsg(__FILE__, __LINE__))
+             end if
+          end if
+
+          ! Get the variable id of the storage pool for this element
+          store_var_id = prt_global%sp_organ_map(store_organ,element_id)
+          
+          ! Loop over all of the coordinate ids
+          do i_pos = 1, prt_global%state_descriptor(i_var)%num_pos 
+             
+           ! The mass that is leaving the plant
+             turnover_mass = (1.0_r8 - retrans) * mass_fraction * prt%variables(i_var)%val(i_pos)
+             
+             ! The mass that is going towards storage
+             retranslocated_mass = retrans * mass_fraction * prt%variables(i_var)%val(i_pos)
+             
+             ! Track the amount of mass being turned over (+ is amount lost)
+             prt%variables(i_var)%turnover(i_pos) = prt%variables(i_var)%turnover(i_pos) &
+                  + turnover_mass
+             
+             ! Track the amount of mass the is being re-translocated (- is amount lost)
+             prt%variables(i_var)%net_alloc(i_pos)  = prt%variables(i_var)%net_alloc(i_pos)  &
+                  - retranslocated_mass
+             
+             ! Update the state of the pool to reflect the mass lost
+             prt%variables(i_var)%val(i_pos)      = prt%variables(i_var)%val(i_pos) &
+                  - (turnover_mass + retranslocated_mass) 
+             
+             ! Now, since re-translocation is handled by the storage pool, 
+             ! we add the re-translocated mass to it
+             
+             prt%variables(store_var_id)%net_alloc(i_store_pos)  = &
+                  prt%variables(store_var_id)%net_alloc(i_store_pos) + retranslocated_mass
+             
+             prt%variables(store_var_id)%val(i_store_pos)  = &
+                  prt%variables(store_var_id)%val(i_store_pos) + retranslocated_mass
+
+          end do
+          
+       end do
+       
+     end associate
+
+     return
+   end subroutine DeciduousTurnoverSimpleRetranslocation2
 
    ! ====================================================================================
 
@@ -555,6 +686,11 @@ contains
              ! Update the state of the pool to reflect the mass lost
              prt%variables(i_var)%val(i_pos)      = prt%variables(i_var)%val(i_pos) &
                   - (turnover_mass + retranslocated_mass) 
+                  
+             write(fates_log(),*) 'PRTLossFluxesMod L 690'
+             write(fates_log(),*) 'i_var: ', i_var, ' i_pos: ', i_pos
+             write(fates_log(),*) 'mass: ', prt%variables(i_var)%val(i_pos)
+             
              
              ! Now, since re-translocation is handled by the storage pool, 
              ! we add the re-translocated mass to it

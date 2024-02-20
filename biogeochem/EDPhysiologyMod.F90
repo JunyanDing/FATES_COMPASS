@@ -26,9 +26,11 @@ module EDPhysiologyMod
   use EDPftvarcon      , only    : GetDecompyFrac
   use FatesInterfaceTypesMod, only    : bc_in_type
   use FatesInterfaceTypesMod, only    : bc_out_type
+
   use EDCohortDynamicsMod , only : zero_cohort
   use EDCohortDynamicsMod , only : create_cohort, sort_cohorts
   use EDCohortDynamicsMod , only : InitPRTObject
+
   use FatesAllometryMod   , only : tree_lai
   use FatesAllometryMod   , only : tree_sai
   use FatesAllometryMod   , only : leafc_from_treelai
@@ -849,6 +851,7 @@ contains
     else
        dayssincecleafoff = model_day_int - currentSite%cleafoffdate
     end if
+    
 
     if (model_day_int < currentSite%cleafondate) then
        dayssincecleafon = model_day_int - (currentSite%cleafondate-365)
@@ -856,6 +859,9 @@ contains
        dayssincecleafon = model_day_int - currentSite%cleafondate
     end if
 
+    ! Junyan added following codes to update days since leaf on/off
+    currentSite%dayssincecleafon = dayssincecleafon
+    currentSite%dayssincecleafoff = dayssincecleafoff
 
 
     !LEAF ON: COLD DECIDUOUS. Needs to
@@ -870,7 +876,7 @@ contains
          currentSite%cstatus == phen_cstat_nevercold) .and. &
          (currentSite%grow_deg_days > gdd_threshold) .and. &
 !         (dayssincecleafoff > ED_val_phen_mindayson) .and. &   Junyan commented this line cause force leaf off 
-         ((hlm_day_of_year.gt.45) .and. (hlm_day_of_year.lt.180)) .and. &  ! don't grow leaf before Feb 15th. or after June.
+         ((hlm_day_of_year.gt.(gddstart+42)) .and. (hlm_day_of_year.lt.(gddstart+180))) .and. &  ! jD:  don't grow leaf before Feb 15th. or after June.
          (currentSite%nchilldays >= 1)) then
        currentSite%cstatus = phen_cstat_notcold  ! Set to not-cold status (leaves can come on)
        currentSite%cleafondate = model_day_int
@@ -878,9 +884,6 @@ contains
        currentSite%grow_deg_days = 0._r8 ! zero GDD for the rest of the year until counting season begins.
        if ( debug ) write(fates_log(),*) 'leaves on'
     endif !GDD
-
-
-
 
     !LEAF OFF: COLD THRESHOLD
     !Needs to:
@@ -1062,7 +1065,8 @@ contains
        currentSite%dstatus = phen_dstat_moistoff     ! alter status of site to 'leaves off'
        currentSite%dleafoffdate = model_day_int      ! record leaf on date
     endif
-
+    
+    
     call phenology_leafonoff(currentSite)
 
   end subroutine phenology
@@ -1090,8 +1094,12 @@ contains
     real(r8) :: store_c_transfer_frac  ! Fraction of storage carbon used to flush leaves
     real(r8) :: totalmemory            ! total memory of carbon [kg]
     integer  :: ipft
-    real(r8), parameter :: leaf_drop_fraction = 1.0_r8
-    real(r8), parameter :: carbon_store_buffer = 0.10_r8
+    !real(r8), parameter :: leaf_drop_fraction = 1.0_r8    ! total proportion of leaf to drop.
+    real(r8) :: leaf_drop_fraction = 1.0_r8    ! note, Junyan changed the cold deciduous to change this value
+    real(r8), parameter :: leaf_drop_fraction_perday = 0.002_r8    ! proportion of leaf to drop per day , Junyan added
+                                                      ! add this as pft parameter    
+    
+    real(r8), parameter :: carbon_store_buffer = 0.1_r8
     real(r8) :: stem_drop_fraction
     !------------------------------------------------------------------------
 
@@ -1114,11 +1122,12 @@ contains
 
           stem_drop_fraction = EDPftvarcon_inst%phen_stem_drop_fraction(ipft)
 
-          ! COLD LEAF ON
+
           ! The site level flags signify that it is no-longer too cold
           ! for leaves. Time to signal flushing
 
           if (prt_params%season_decid(ipft) == itrue)then
+             ! COLD LEAF ON          
              if ( currentSite%cstatus == phen_cstat_notcold  )then                ! we have just moved to leaves being on .
                 if (currentCohort%status_coh == leaves_off)then ! Are the leaves currently off?
                    currentCohort%status_coh = leaves_on         ! Leaves are on, so change status to
@@ -1178,46 +1187,67 @@ contains
              endif ! growing season
 
              !COLD LEAF OFF
+             
+             ! Junyan added following code to recalcualte leaf drop fraction instead of the default value of 1             
+             leaf_drop_fraction = leaf_drop_fraction_perday * currentSite%dayssincecleafoff             
+
+                                     
              if (currentSite%cstatus == phen_cstat_nevercold .or. &
                   currentSite%cstatus == phen_cstat_iscold) then ! past leaf drop day? Leaves still on tree?
-
-                if (currentCohort%status_coh == leaves_on) then ! leaves have not dropped
-
+               !if (currentCohort%status_coh == leaves_on) then ! leaves have not dropped
+               if (currentCohort%status_coh == leaves_on .or. leaf_drop_fraction <= 1._r8) then  ! leave have not all dropped, Junyan changed               
                    ! leaf off occur on individuals bigger than specific size for grass
                    if (currentCohort%dbh > EDPftvarcon_inst%phen_cold_size_threshold(ipft) &
                         .or. prt_params%woody(ipft)==itrue) then
 
-                      ! This sets the cohort to the "leaves off" flag
-                      currentCohort%status_coh  = leaves_off
+                       ! Junyan added: change the status when it is the first day of leaf off
+                       ! and move the stem off to here for non woody plants
+                       
+                       
+                       if (currentCohort%status_coh == leaves_on) then   !  
+                          ! This sets the cohort to the "leaves off" flag
+                          currentCohort%status_coh  = leaves_off
+    
+                          ! Remember what the lai was (leaf mass actually) was for next year
+                          ! the same amount back on in the spring...
+    
+                          currentCohort%laimemory   = leaf_c
 
-                      ! Remember what the lai was (leaf mass actually) was for next year
-                      ! the same amount back on in the spring...
+                          if(prt_params%woody(ipft).ne.itrue)then
+    
+                             currentCohort%sapwmemory   = sapw_c * stem_drop_fraction
+    
+                             currentCohort%structmemory   = struct_c * stem_drop_fraction
+    
+                             call PRTDeciduousTurnover(currentCohort%prt,ipft, &
+                                  sapw_organ, stem_drop_fraction)
+    
+                             call PRTDeciduousTurnover(currentCohort%prt,ipft, &
+                                  struct_organ, stem_drop_fraction)
 
-                      currentCohort%laimemory   = leaf_c
 
-                      ! Drop Leaves (this routine will update the leaf state variables,
-                      ! for carbon and any other element that are prognostic. It will
-                      ! also track the turnover masses that will be sent to litter later on)
+                          endif	! woody plant check
+                       else
+                         ! Drop Leaves (this routine will update the leaf state variables,
 
-                      call PRTDeciduousTurnover(currentCohort%prt,ipft, &
-                           leaf_organ, leaf_drop_fraction)
+                         ! for carbon and any other element that are prognostic. It will
+                         ! also track the turnover masses that will be sent to litter later on)
+                         write(fates_log(),*) 'EDPhysiologyMod, line 1235'
+                         write(fates_log(),*) 'days since leaf off:', currentSite%dayssincecleafoff
+                         write(fates_log(),*) 'leaf_drop_fraction: ' ,  leaf_drop_fraction                         
+                         
+                         ! Junyan added to drop leaf when status is leafoff
+                         ! because the way dayssincecleafoff is calculated 
+                                      
+                          call PRTDeciduousTurnover(currentCohort%prt,ipft, &
+                               leaf_organ, leaf_drop_fraction)                          
+                       endif !
 
-                      if(prt_params%woody(ipft).ne.itrue)then
 
-                         currentCohort%sapwmemory   = sapw_c * stem_drop_fraction
 
-                         currentCohort%structmemory   = struct_c * stem_drop_fraction
-
-                         call PRTDeciduousTurnover(currentCohort%prt,ipft, &
-                              sapw_organ, stem_drop_fraction)
-
-                         call PRTDeciduousTurnover(currentCohort%prt,ipft, &
-                              struct_organ, stem_drop_fraction)
-
-                      endif	! woody plant check
-                   endif ! individual dbh size check
-                endif !leaf status
-             endif !currentSite status
+                     endif !individual dbh size check
+                  endif !leaf status  
+               endif !currentSite status
           endif  !season_decid
 
           ! DROUGHT LEAF ON
@@ -1808,7 +1838,10 @@ contains
     !
     ! !DESCRIPTION:
     ! spawn new cohorts of juveniles of each PFT
-    !
+    ! 
+    ! Junyan modified this subroutine to incorporate the constrain of water table 
+    !   and space on recruitment rate on Jan. 23, 2023
+    !   
     ! !USES:
     use FatesInterfaceTypesMod, only : hlm_use_ed_prescribed_phys
     use FatesConstantsMod, only : pi => pi_const
@@ -1847,12 +1880,17 @@ contains
     real(r8) :: m_repro     ! reproductive mass (element agnostic) [kg]
     real(r8) :: mass_avail  ! The mass of each nutrient/carbon available in the seed_germination pool [kg]
     real(r8) :: mass_demand ! Total mass demanded by the plant to achieve the stoichiometric targets
+
+    ! Below are Junyan added variable
     ! of all the organs in the recruits. Used for both [kg per plant] and [kg per cohort]
     real(r8) :: stem_drop_fraction
 
     real(r8) :: rec_max_act   ! actuall maximum stand density for recruitment      [n/ha] Junyan added
     real(r8) :: tba_tree      ! total basal area of all the trees per ha in the patch [ha/ha]  
-    real(r8) :: n_grass       ! total number of individual of grass per ha [n/ha]      
+    real(r8) :: n_grass       ! total number of individual of grass per ha [n/ha] 
+    real(r8) :: tree_rec_ratio  ! the ratio of seed germinated of current pft to total seed geminated of all tree pfts
+    real(r8) :: total_seed_germ ! total seed germinated of all the tree pfts [kg] 
+    real(r8) :: total_seedling  ! total number of seedling per ha used to constrain recruitment rate of trees  [n/ha]    
     !----------------------------------------------------------------------
 
     allocate(temp_cohort) ! create temporary cohort
@@ -1862,18 +1900,33 @@ contains
     ! calculate total basal area of trees and total n of grass for current patch
     tba_tree = 0.0_r8
     n_grass = 0.0_r8
+    total_seed_germ = 0.0_r8
+    total_seedling = 0.0_r8
     ccohort => currentPatch%shortest
     do while(associated(ccohort))
          ! calculate total basal area of trees
          if (prt_params%woody(ccohort%pft)==1 ) then
             ! dbh is in cm, convert to m then convert ba in m^2 to ha
             tba_tree = tba_tree + ( pi * ((ccohort%dbh/200) ** 2 ) * ha_per_m2)* ccohort%n 
+            
+            ! calcualte the total seedling number
+            if (ccohort%dbh < 3.5_r8) then
+               total_seedling = total_seedling + ccohort%n
+            endif
+            
          endif
          
          if (prt_params%woody(ccohort%pft)==0 ) then
            n_grass = n_grass + ccohort%n
          endif
          ccohort => ccohort%taller
+    enddo
+    
+    ! calculated total seed germination for tree pfts
+    do ft = 1,numpft   
+      if (prt_params%woody(ft)==1 ) then       
+        total_seed_germ = total_seed_germ + currentPatch%litter(carbon12_element)%seed_germ(ft)
+      endif 
     enddo
     ! end Junyan addition
     
@@ -1995,18 +2048,29 @@ contains
                 end select
 
                 mass_avail = currentPatch%area * currentPatch%litter(el)%seed_germ(ft)
-
+                
+                
                 ! ------------------------------------------------------------------------
                 ! Update number density if this is the limiting mass
                 ! Junyan midified the following code to adding the contrain of space on recruitment
                 ! ------------------------------------------------------------------------
-
                 ! temp_cohort%n = min(temp_cohort%n, mass_avail/mass_demand)  
                 ! tried 2.5 , current use 4.0 
+                
+                    
+                
                 if (prt_params%woody(ft)==0) then
+                   ! for grass, scale with the proportion not occupied by 4 x total tree basal area
                    rec_max_act = (  max(0._r8, (1 - 4.0_r8 * tba_tree)) * EDPftvarcon_inst%max_rec(ft) - n_grass)
                 else
-                
+                   ! for trees, scale with empty ground and proportion of this pft recruitment/ total tree pft recruitment
+                   ! the max_rec defines the maximum seedling density, only recruit the amount that away from the maxiumn density
+                   if (total_seed_germ > 0._r8) then
+                      tree_rec_ratio = currentPatch%litter(carbon12_element)%seed_germ(ft) / total_seed_germ
+                      rec_max_act = (  max(0._r8, (1 - 4.0_r8 * tba_tree)) * max((EDPftvarcon_inst%max_rec(ft) - total_seedling),0.0_r8) * tree_rec_ratio)
+                   else
+                      rec_max_act = 0._r8
+                   endif
                 endif  
                 temp_cohort%n = min(temp_cohort%n, mass_avail/mass_demand, rec_max_act)
 

@@ -96,6 +96,7 @@ module FATESPlantRespPhotosynthMod
   integer, parameter :: medlyn_model = 2
   integer, parameter :: ballberry_model2 = 3
   integer, parameter :: medlyn_model2 = 4    
+  integer, parameter :: gsmax_model = 5  
   
   ! Alternatively, Gross Assimilation can be used to estimate
   ! leaf co2 partial pressure and therefore conductance. The default
@@ -1023,6 +1024,7 @@ subroutine LeafLayerPhotosynthesis(f_sun_lsl,         &  ! in
   real(r8)           ::  bb_slope              ! slope of BB relationship, unitless
   real(r8)           ::  medlyn_slope          ! Slope for Medlyn stomatal conductance model method, the unit is KPa^0.5
   real(r8)           ::  stomatal_intercept    !Unstressed minimum stomatal conductance, the unit is umol/m**2/s
+  real(r8)           ::  gs_max, gs_min        ! maximum and minimum stomatal conductance for stomata mode 5   
 
   if (stomatal_model == ballberry_model) then  
        bb_slope  = EDPftvarcon_inst%bb_slope(ft)     
@@ -1034,7 +1036,12 @@ subroutine LeafLayerPhotosynthesis(f_sun_lsl,         &  ! in
       medlyn_slope= EDPftvarcon_inst%medlyn_slope(ft)*btran
       
   end if      
-            
+  
+  
+  if (stomatal_model == gsmax_model) then           
+      gs_max = EDPftvarcon_inst%gs_max(ft)
+      gs_min = EDPftvarcon_inst%gs_min(ft)
+  end if
   
   stomatal_intercept= EDPftvarcon_inst%stomatal_intercept(ft)   
 
@@ -1191,10 +1198,12 @@ subroutine LeafLayerPhotosynthesis(f_sun_lsl,         &  ! in
                  a_gs = anet
               end if
 
+              
               ! With an <= 0, then gs_mol = stomatal_intercept_btran
               leaf_co2_ppress = can_co2_ppress- h2o_co2_bl_diffuse_ratio/gb_mol * a_gs * can_press 		   
               leaf_co2_ppress = max(leaf_co2_ppress,1.e-06_r8)
               
+              ! Apply the control of stomatal conductance on leaf carbon fixation
               if ( stomatal_model == medlyn_model .or. stomatal_model == medlyn_model2) then
                  !stomatal conductance calculated from Medlyn et al. (2011), the numerical &
                  !implementation was adapted from the equations in CLM5.0
@@ -1226,6 +1235,11 @@ subroutine LeafLayerPhotosynthesis(f_sun_lsl,         &  ! in
                 write (fates_log(),*)'can_press= ',can_press
                 write (fates_log(),*)'can_co2_ppress= ',can_co2_ppress
                 write (fates_log(),*)'a_gs= ',a_gs
+              end if
+              
+              ! Junyan added a new stoma mode gs=btran*gs_max +gs_min
+              if ( stomatal_model == gsmax_model) then
+                  gs_mol = gs_max * btran + gs_min 
               end if
               
               co2_inter_c = can_co2_ppress - a_gs * can_press * &
@@ -1298,9 +1312,13 @@ subroutine LeafLayerPhotosynthesis(f_sun_lsl,         &  ! in
               gs_mol_err = bb_slope*max(a_gs, 0._r8)*hs/leaf_co2_ppress*can_press + stomatal_intercept_btran
            end if
 
+           if ( stomatal_model == gsmax_model) then
+               gs_mol_err  = 0.0_r8 
+           end if
+
            if (abs(gs_mol-gs_mol_err) > 1.e-01_r8) then
-              write (fates_log(),*) 'Stomatal model error check - stomatal conductance error:'
-              write (fates_log(),*) gs_mol, gs_mol_err
+             ! write (fates_log(),*) 'Stomatal model error check - stomatal conductance error:'
+             ! write (fates_log(),*) gs_mol, gs_mol_err
            end if
 
         enddo !sunsha loop
@@ -1420,9 +1438,9 @@ function LeafHumidityStomaResis(leaf_psi, veg_tempk, ceair, can_press, veg_esat,
   end if
   
   if (JD_debug) then
-     write (fates_log(),*) 'line 1423'
-     write (fates_log(),*) 'gstoma:', gstoma, 'rstoma_out:', rstoma_out
-     write (fates_log(),*) 'qsat_adj:', qsat_adj, 'qs:', qs  
+     !write (fates_log(),*) 'line 1423'
+     !write (fates_log(),*) 'gstoma:', gstoma, 'rstoma_out:', rstoma_out
+     !write (fates_log(),*) 'qsat_adj:', qsat_adj, 'qs:', qs  
   end if 
   if (rstoma_out < nearzero ) then
      write (fates_log(),*) 'gstoma:', gstoma, 'qsat_adj:', qsat_adj

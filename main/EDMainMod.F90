@@ -434,9 +434,17 @@ contains
           ! -----------------------------------------------------------------------------
           ! Growth and Allocation (PARTEH)
           ! -----------------------------------------------------------------------------
-
-          call currentCohort%prt%DailyPRT()
-
+          
+          ! Junyan changed Carbon DailyPRT function to add cohort laimemory and site days since leaf off
+          ! as the arguments      
+          
+          if(hlm_parteh_mode .eq. prt_cnp_flex_allom_hyp ) then
+             ! nutrients parteh mode
+             call currentCohort%prt%DailyPRT(currentSite%dayssincecleafoff,currentSite%dayssincedleafoff)   
+          else
+             ! Carbon parteh mode
+             call currentCohort%prt%DailyPRT(currentSite%dayssincecleafoff,currentSite%dayssincedleafoff)
+          end if
 
           ! Update the mass balance tracking for the daily nutrient uptake flux
           ! Then zero out the daily uptakes, they have been used
@@ -697,6 +705,9 @@ contains
 
     ! FIX(RF,032414). This needs to be monthly, not annual
     ! If this is the second to last day of the year, then perform trimming
+    
+    ! Junyan changed below to trim every 30 days -  Dec. 23 2022
+    !if( hlm_day_of_year == hlm_days_per_year-1) then
     if( hlm_day_of_year == hlm_days_per_year-1) then
 
      if(hlm_use_sp.eq.ifalse)then
@@ -871,7 +882,8 @@ contains
                 currentPatch => currentPatch%younger
              enddo !end patch loop
              write(fates_log(),*) 'aborting on date:',hlm_current_year,hlm_current_month,hlm_current_day
-             call endrun(msg=errMsg(sourcefile, __LINE__))
+             ! Junyan turn off the endrun call 
+             !call endrun(msg=errMsg(sourcefile, __LINE__))    
          !end if
 
       endif

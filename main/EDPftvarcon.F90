@@ -52,10 +52,14 @@ module EDPftvarcon
      real(r8), allocatable :: initd(:)               ! initial seedling density
 
      real(r8), allocatable :: seed_suppl(:)          ! seeds that come from outside the gridbox.
+     real(r8), allocatable :: recth_sal(:)           ! salinity threshold for recruitment   [PSU] Junyan added
+     real(r8), allocatable :: recth_wt(:)            ! water table threshold for recruitment  [M] Junyan added          
+     
      real(r8), allocatable :: bb_slope(:)            ! ball berry slope parameter
      real(r8), allocatable :: medlyn_slope(:)        ! Medlyn slope parameter KPa^0.5
      real(r8), allocatable :: stomatal_intercept(:)  ! intercept of stomatal conductance model
-
+     real(r8), allocatable :: gs_max(:)              ! maximum stoma conductance of vapor of stoma mode 5 Junyan added
+     real(r8), allocatable :: gs_min(:)              ! minimum stoma conductance of vapor of stoma mode 5      
 
      real(r8), allocatable :: lf_flab(:)             ! Leaf litter labile fraction [-]
      real(r8), allocatable :: lf_fcel(:)             ! Leaf litter cellulose fraction [-]
@@ -208,6 +212,8 @@ module EDPftvarcon
                                                     ! due to anoxia, se = theta - theta_res / theta_sat - theta_res     
      real(r8), allocatable :: hydr_frt_loss_salcr(:)    ! critical soil salinity for counting cumulative effect   (PSU)
      real(r8), allocatable :: hydr_frt_loss_salk(:)     ! parameter determine how fast fine root loss with cumulative effect         
+     real(r8), allocatable :: hydr_frt_loss_sata(:)     ! parameter determine how fast fine root loss with saturation duration         
+
      real(r8), allocatable :: hydr_vg_dn_sal(:)         ! rate of change of VG vulnarability curve parameter n with PSU
      real(r8), allocatable :: hydr_vg_da_sal(:)         ! rate of change of VG curve parameter a with PSU
      real(r8), allocatable :: hydr_PSU_vg_init(:)       ! PSU that associated with the original VG parameters (m,n,alpha) given in paramter file
@@ -362,6 +368,22 @@ contains
     name = 'fates_seed_suppl'
     call fates_params%RegisterParameter(name=name, dimension_shape=dimension_shape_1d, &
          dimension_names=dim_names, lower_bounds=dim_lower_bound)
+         
+    name = 'fates_recth_sal'
+    call fates_params%RegisterParameter(name=name, dimension_shape=dimension_shape_1d, &
+         dimension_names=dim_names, lower_bounds=dim_lower_bound)
+
+    name = 'fates_recth_wt'
+    call fates_params%RegisterParameter(name=name, dimension_shape=dimension_shape_1d, &
+         dimension_names=dim_names, lower_bounds=dim_lower_bound)
+         
+    name = 'fates_leaf_gs_max'
+    call fates_params%RegisterParameter(name=name, dimension_shape=dimension_shape_1d, &
+         dimension_names=dim_names, lower_bounds=dim_lower_bound)
+         
+    name = 'fates_leaf_gs_min'
+    call fates_params%RegisterParameter(name=name, dimension_shape=dimension_shape_1d, &
+         dimension_names=dim_names, lower_bounds=dim_lower_bound)         
 
     name = 'fates_leaf_stomatal_slope_ballberry'
     call fates_params%RegisterParameter(name=name, dimension_shape=dimension_shape_1d, &
@@ -507,6 +529,10 @@ contains
          dimension_names=dim_names, lower_bounds=dim_lower_bound)
          
     name = 'fates_hydr_frt_loss_salk'
+    call fates_params%RegisterParameter(name=name, dimension_shape=dimension_shape_1d, &
+         dimension_names=dim_names, lower_bounds=dim_lower_bound)
+
+    name = 'fates_hydr_frt_loss_sata'
     call fates_params%RegisterParameter(name=name, dimension_shape=dimension_shape_1d, &
          dimension_names=dim_names, lower_bounds=dim_lower_bound)
          
@@ -757,6 +783,22 @@ contains
     call fates_params%RetreiveParameterAllocate(name=name, &
          data=this%seed_suppl)
 
+    name = 'fates_recth_sal'
+    call fates_params%RetreiveParameterAllocate(name=name, &
+         data=this%recth_sal)
+         
+    name = 'fates_recth_wt'
+    call fates_params%RetreiveParameterAllocate(name=name, &
+         data=this%recth_wt)                  
+
+    name = 'fates_leaf_gs_max'
+    call fates_params%RetreiveParameterAllocate(name=name, &
+         data=this%gs_max)
+
+    name = 'fates_leaf_gs_min'
+    call fates_params%RetreiveParameterAllocate(name=name, &
+         data=this%gs_min)
+
     name = 'fates_leaf_stomatal_slope_ballberry'
     call fates_params%RetreiveParameterAllocate(name=name, &
          data=this%bb_slope)
@@ -898,7 +940,7 @@ contains
     call fates_params%RetreiveParameterAllocate(name=name, &
          data=this%hydr_frt_loss_se0)  
          
-
+         
     name = 'fates_hydr_frt_loss_salcr'
     call fates_params%RetreiveParameterAllocate(name=name, &
          data=this%hydr_frt_loss_salcr)
@@ -906,6 +948,10 @@ contains
     name = 'fates_hydr_frt_loss_salk'
     call fates_params%RetreiveParameterAllocate(name=name, &
          data=this%hydr_frt_loss_salk)         
+
+    name = 'fates_hydr_frt_loss_sata'
+    call fates_params%RetreiveParameterAllocate(name=name, &
+         data=this%hydr_frt_loss_sata)         
          
     name = 'fates_hydr_vg_dn_sal'
     call fates_params%RetreiveParameterAllocate(name=name, &
@@ -1534,6 +1580,10 @@ contains
         write(fates_log(),fmt0) 'crown_kill = ',EDPftvarcon_inst%crown_kill
         write(fates_log(),fmt0) 'initd = ',EDPftvarcon_inst%initd
         write(fates_log(),fmt0) 'seed_suppl = ',EDPftvarcon_inst%seed_suppl
+        write(fates_log(),fmt0) 'recth_sal = ',EDPftvarcon_inst%recth_sal        
+        write(fates_log(),fmt0) 'recth_wt = ',EDPftvarcon_inst%recth_wt        
+        write(fates_log(),fmt0) 'gs_max = ',EDPftvarcon_inst%gs_max
+        write(fates_log(),fmt0) 'gs_min = ',EDPftvarcon_inst%gs_min                
         write(fates_log(),fmt0) 'bb_slope = ',EDPftvarcon_inst%bb_slope
         write(fates_log(),fmt0) 'medlyn_slope = ',EDPftvarcon_inst%medlyn_slope
         write(fates_log(),fmt0) 'stomatal_intercept = ',EDPftvarcon_inst%stomatal_intercept
@@ -1596,6 +1646,7 @@ contains
         
         write(fates_log(),fmt0) 'hydr_frt_loss_salcr = ',EDPftvarcon_inst%hydr_frt_loss_salcr 
         write(fates_log(),fmt0) 'hydr_frt_loss_salk = ',EDPftvarcon_inst%hydr_frt_loss_salk 
+        write(fates_log(),fmt0) 'hydr_frt_loss_sata = ',EDPftvarcon_inst%hydr_frt_loss_sata        
         write(fates_log(),fmt0) 'hydr_vg_dn_sal = ',EDPftvarcon_inst%hydr_vg_dn_sal 
         write(fates_log(),fmt0) 'hydr_vg_da_sal = ',EDPftvarcon_inst%hydr_vg_da_sal 
         write(fates_log(),fmt0) 'hydr_PSU_vg_init = ',EDPftvarcon_inst%hydr_PSU_vg_init 

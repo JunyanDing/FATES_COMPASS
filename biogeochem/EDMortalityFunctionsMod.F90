@@ -140,7 +140,7 @@ if (hlm_use_ed_prescribed_phys .eq. ifalse) then
      if(flc >= hf_flc_threshold .and. hf_flc_threshold < 1.0_r8 )then 
        hmort = (flc-hf_flc_threshold)/(1.0_r8-hf_flc_threshold) * &
            EDPftvarcon_inst%mort_scalar_hydrfailure(cohort_in%pft)
-           ! ort_scalar_hydrfailure(cohort_in%pft) is the maximum mortality rate of hydraulic failure
+           ! mort_scalar_hydrfailure(cohort_in%pft) is the maximum mortality rate of hydraulic failure
      else
        hmort = 0.0_r8
      endif      

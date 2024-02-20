@@ -103,7 +103,7 @@ module FatesHydraulicsMemMod
      real(r8),allocatable :: r_node_shell_init(:,:) ! Previous Nodal radius of rhizosphere compartment (m)
      real(r8),allocatable :: l_aroot_layer(:)       ! Total length (across cohorts) of absorbing
                                                     !  roots by soil layer (m)
-     real(r8),allocatable :: l_aroot_layer_init(:)  ! Total length (across cohorts) of absorbing
+     real(r8),allocatable :: l_aroot_layer_init(:)  ! Previous Total length (across cohorts) of absorbing
                                                     !  roots by soil layer (m)
      real(r8),allocatable :: kmax_upper_shell(:,:)  ! Maximum soil hydraulic conductance node k 
                                                     ! to upper (closer to atmosphere) rhiz 
@@ -273,7 +273,7 @@ module FatesHydraulicsMemMod
      real(r8),allocatable :: v_aroot_layer_init(:) ! previous day's volume of absorbing roots by soil layer    [m3]
      real(r8),allocatable :: v_aroot_layer(:)      ! volume of absorbing roots by soil layer                   [m3]
      real(r8),allocatable :: l_aroot_layer(:)      ! length of absorbing roots by soil layer                   [m]
-     
+     real(r8),allocatable :: kfr_red_layer(:)      ! fraction loss of absorbing roots by soil layer            [portion]     Junyan 
 
      
      ! State variable, relative water content by volume (i.e. "theta")
@@ -370,7 +370,8 @@ module FatesHydraulicsMemMod
        allocate(this%ftc_aroot(1:nlevrhiz))
        ! Junyan added 
        allocate(this%salcon_aroot(1:nlevrhiz))
-       allocate(this%psi_osm_aroot(1:nlevrhiz))       
+       allocate(this%psi_osm_aroot(1:nlevrhiz))    
+       allocate(this%kfr_red_layer(1:nlevrhiz))   
        return
     end subroutine AllocateHydrCohortArrays
 
@@ -394,6 +395,7 @@ module FatesHydraulicsMemMod
        ! Junyan added 
        deallocate(this%salcon_aroot)
        deallocate(this%psi_osm_aroot) 
+       deallocate(this%kfr_red_layer)
        return
     end subroutine DeallocateHydrCohortArrays
 
@@ -440,6 +442,7 @@ module FatesHydraulicsMemMod
          allocate(this%soil_th_mem(1:nlevrhiz,the_soil_th_mem_size)) ; this%soil_th_mem = 0  ! Junyan, initialize the temporary memory of 
          allocate(this%acc_sal_slpf(1:nlevrhiz,1:numpft)) ; this%acc_sal_slpf = 0.0_r8  ! Junyan, initialize the cumulative salinity effct to be 0 
          
+                  
          this%errh2o_hyd     = nan
          this%dwat_veg       = nan
          this%h2oveg         = 0.0_r8

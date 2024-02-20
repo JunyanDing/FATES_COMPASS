@@ -143,7 +143,7 @@ contains
 
 
 
-  subroutine create_cohort(currentSite, patchptr, thechr,pft, nn, hite, coage, dbh,   &
+  subroutine create_cohort(currentSite, patchptr, thechr, pft, nn, hite, coage, dbh,   &
                            prt, laimemory, sapwmemory, structmemory, &
                            status, recruitstatus,ctrim, carea, clayer, spread, bc_in)
     !
@@ -332,7 +332,7 @@ contains
        call UpdatePlantHydrLenVol(new_cohort,currentSite%si_hydr)
 
        ! This updates the Kmax's of the plant's compartments
-       call UpdatePlantKmax(new_cohort%co_hydr,new_cohort,currentSite%si_hydr)
+       call UpdatePlantKmax(new_cohort%co_hydr,new_cohort,currentSite%si_hydr,bc_in)  ! Junyan 
 
        ! Since this is a newly initialized plant, we set the previous compartment-size
        ! equal to the ones we just calculated.

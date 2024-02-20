@@ -320,9 +320,11 @@ contains
   ! =====================================================================================
 
 
-  subroutine DailyPRTAllometricCNP(this)
+  subroutine DailyPRTAllometricCNP(this,dayscleafoff,daysdleafoff)
 
     class(cnp_allom_prt_vartypes) :: this
+    integer,intent(in) :: dayscleafoff             ! the number of days since cold leaf off, Junyan added    
+    integer,intent(in) :: daysdleafoff             ! the number of days since drought leaf off, Junyan added    
     
     ! Pointers to in-out bcs
     real(r8),pointer :: dbh          ! Diameter at breast height [cm]

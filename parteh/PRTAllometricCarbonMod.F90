@@ -51,6 +51,7 @@ module PRTAllometricCarbonMod
 
   use PRTParametersMod    , only : prt_params
 
+
   implicit none
   private
 
@@ -238,7 +239,7 @@ contains
   ! =====================================================================================
   
 
-  subroutine DailyPRTAllometricCarbon(this)
+  subroutine DailyPRTAllometricCarbon(this,dayscleafoff,daysdleafoff)
 
     ! -----------------------------------------------------------------------------------
     !
@@ -292,9 +293,14 @@ contains
                                        ! this local will point to both in and out bc's
     real(r8),pointer :: carbon_balance ! Daily carbon balance for this cohort [kgC]
 
-    real(r8) :: canopy_trim            ! The canopy trimming function [0-1]
+    real(r8) :: canopy_trim            ! The canopy trimming function [0-1], 0 - remove all leaves, 1 - no trim
+    real(r8) :: canopy_trim_adj        ! Adjusted canopy trimming fuction when decideous is at leaf off status , Junyan added
+                                       ! to make leaf drop gradually 
+                                       
     integer  :: ipft                   ! Plant Functional Type index
 
+    integer,intent(in)  :: dayscleafoff            ! number of days of cold leaf off of current site
+    integer,intent(in)  :: daysdleafoff            ! number of days of cold leaf off of current site
 
     real(r8) :: target_leaf_c         ! target leaf carbon [kgC]
     real(r8) :: target_fnrt_c         ! target fine-root carbon [kgC]
@@ -358,6 +364,7 @@ contains
     integer  :: leaf_status           ! are leaves on (2) or off (1) 
     real(r8) :: leaf_age_flux         ! carbon mass flux between leaf age classification pools
 
+    
 
     ! Integegrator variables c_pool is "mostly" carbon variables, it also includes
     ! dbh...
@@ -451,11 +458,28 @@ contains
     call bdead_allom( target_agw_c, target_bgw_c, target_sapw_c, ipft, target_struct_c)
     
     ! Target leaf biomass according to allometry and trimming
+
     if(leaf_status==2) then
         call bleaf(dbh,ipft,canopy_trim,target_leaf_c)
     else
         target_leaf_c = 0._r8
+        
+        ! Junyan changed below to make leaf off slower when leaf is in off status leaf_status==1         
+        !canopy_trim_adj = canopy_trim * max(0._r8 , (1-leaf_drop_fraction_perday * dayscleafoff))
+        !call bleaf(dbh,ipft,canopy_trim_adj,target_leaf_c)
+        !write(fates_log(),*)' PRTAllometricCarbon line 463'
+        !write(fates_log(),*)'leaf_status: ', leaf_status
+        !write(fates_log(),*)'canopy_trim :', canopy_trim
+        !write(fates_log(),*)'target_leaf_c :', target_leaf_c        
+        !write(fates_log(),*)'dayscleafoff :', dayscleafoff 
+        !write(fates_log(),*)'target_leaf_c :', target_leaf_c 
+        !write(fates_log(),*)'leaf fraction :', max(0._r8 , (1-leaf_drop_fraction_perday * dayscleafoff))
+        
+        ! target_leaf_c = target_leaf_c * max(0.0_r8 , (1-leaf_drop_fraction_perday * dayscleafoff)) 
+        !write(fates_log(),*)'adjusted target_leaf_c :', target_leaf_c           
+        
     end if
+    
     
     ! Target fine-root biomass and deriv. according to allometry and trimming [kgC, kgC/cm]
     call bfineroot(dbh,ipft,canopy_trim,target_fnrt_c)
@@ -470,11 +494,19 @@ contains
     !         or forcefully pay from storage. 
     ! -----------------------------------------------------------------------------------
     
+
     if( prt_params%evergreen(ipft) ==1 ) then
        leaf_c_demand   = max(0.0_r8, &
              prt_params%leaf_stor_priority(ipft)*sum(this%variables(leaf_c_id)%turnover(:)))
     else
-       leaf_c_demand   = 0.0_r8
+ 
+       leaf_c_demand   = 0.0_r8     ! original code
+
+       ! Junyan changed below to set leaf c demand for decedious as well
+       ! regulated by leaf fraction       max(0.0_r8 , (1-leaf_drop_fraction_perday * dayscleafoff)) * 
+ 
+       !leaf_c_demand   = max(0.0_r8, &
+       !      prt_params%leaf_stor_priority(ipft)*sum(this%variables(leaf_c_id)%turnover(:)))
     end if
     
     fnrt_c_demand   = max(0.0_r8, &

@@ -30,7 +30,7 @@ module EDTypesMod
                                                      (/ 10, 4 /)  !!! MUST SUM TO maxPatchesPerSite !!!
   integer,  public :: maxCohortsPerPatch = 100            ! maximum number of cohorts per patch
   
-  integer, parameter, public :: nclmax = 2                ! Maximum number of canopy layers
+  integer, parameter, public :: nclmax = 2                ! Maximum number of forest story layers
   integer, parameter, public :: ican_upper = 1            ! Nominal index for the upper canopy
   integer, parameter, public :: ican_ustory = 2           ! Nominal index for diagnostics that refer
                                                           ! to understory layers (all layers that
@@ -730,7 +730,12 @@ module EDTypesMod
      integer  ::  cleafoffdate                                 ! model date (day integer) of leaf off (cold):-
      integer  ::  dleafondate                                  ! model date (day integer) of leaf on drought:-
      integer  ::  dleafoffdate                                 ! model date (day integer) of leaf off drought:-
-
+     integer  ::  dayssincecleafon                             ! number of days since could leaf on   Junyan
+     integer  ::  dayssincecleafoff                            ! number of days since could leaf off        
+     integer  ::  dayssincedleafon                             ! number of days since drought leaf on   
+     integer  ::  dayssincedleafoff                            ! number of days since drought leaf off        
+      
+     
      real(r8) ::  water_memory(numWaterMem)                             ! last 10 days of soil moisture memory...
 
 
@@ -770,7 +775,8 @@ module EDTypesMod
 
      
      ! DIAGNOSTICS
-     real(r8), allocatable :: SoilSal (:)       ! soil salinity value to be read from an input file, indexed by day  [PSU] Junyan
+     real(r8), allocatable :: SoilSal (:,:)       ! soil salinity (1st column) and water table depth (2nd column) values [PSU m] 
+                                                  ! to be read from an input file, indexed by day ,  Junyan added
 
      ! TERMINATION, RECRUITMENT, DEMOTION, and DISTURBANCE
      
@@ -813,7 +819,10 @@ module EDTypesMod
 
 
      ! Canopy Spread
+     ! Junyan changed May 10, make spread to be canopy layer 
      real(r8) ::  spread                                          ! dynamic canopy allometric term [unitless]
+     ! real(r8) :: spread(nclmax)                                 ! dynamic allometric term for each forest story layer 
+
 
      ! site-level variables to keep track of the disturbance rates, both actual and "potential"
      real(r8) :: disturbance_rates_primary_to_primary(N_DIST_TYPES)      ! actual disturbance rates from primary patches to primary patches [m2/m2/day]

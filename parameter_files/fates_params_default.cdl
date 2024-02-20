@@ -300,6 +300,10 @@ variables:
 		fates_hydr_frt_loss_salk:units = "unitless" ;
 		fates_hydr_frt_loss_salk:long_name = "the increase rate parameter in soil salinity induced fine root mortality " ;     
 
+	double fates_hydr_frt_loss_sata(fates_pft) ;
+		fates_hydr_frt_loss_sata:units = "unitless" ;
+		fates_hydr_frt_loss_sata:long_name = "the slope parameter in soil saturation induced fine root mortality " ;     
+
 	double fates_hydr_vg_dn_sal(fates_pft) ;
 		fates_hydr_vg_dn_sal:units = "unitless" ;
 		fates_hydr_vg_dn_sal:long_name = "rate of change of van Genuchten parameter n with (plant organ)salinity (PSU)" ;     
@@ -312,7 +316,7 @@ variables:
 
 	double fates_max_rec(fates_pft) ;
 		fates_max_rec:units = "n/ha" ;
-		fates_max_rec:long_name = "maximum recruitment" ;     
+		fates_max_rec:long_name = "maximum recruitment under ideal condition of an empty patch" ;     
 
 	double fates_hydr_vcmax_loss_sal_a(fates_pft) ;
 		fates_hydr_vcmax_loss_sal_a:units = "unitless" ;
@@ -363,6 +367,14 @@ variables:
 	double fates_leaf_slatop(fates_pft) ;
 		fates_leaf_slatop:units = "m^2/gC" ;
 		fates_leaf_slatop:long_name = "Specific Leaf Area (SLA) at top of canopy, projected area basis" ;
+
+	double fates_leaf_gs_max(fates_pft) ;
+		fates_leaf_gs_max:units = "umol H2O/m**2/s" ;
+		fates_leaf_gs_max:long_name = "maximum stoma conductance of H2O per leaf area, for maximum stoma mode" ;
+	double fates_leaf_gs_min(fates_pft) ;
+		fates_leaf_gs_min:units = "umol H2O/m**2/s" ;
+		fates_leaf_gs_min:long_name = "minimum stoma conductance of H2O per leaf area, for maximum stoma mode" ;
+
 	double fates_leaf_stomatal_intercept(fates_pft) ;
 		fates_leaf_stomatal_intercept:units = "umol H2O/m**2/s" ;
 		fates_leaf_stomatal_intercept:long_name = "Minimum unstressed stomatal conductance for Ball-Berry model and Medlyn model" ;
@@ -548,6 +560,14 @@ variables:
 	double fates_seed_suppl(fates_pft) ;
 		fates_seed_suppl:units = "KgC/m2/yr" ;
 		fates_seed_suppl:long_name = "Supplemental external seed rain source term (non-mass conserving)" ;
+
+	double fates_recth_sal(fates_pft) ;
+		fates_recth_sal:units = "PSU" ;
+		fates_recth_sal:long_name = "soil salinity threshold when there is no recruitment" ;
+	double fates_recth_wt(fates_pft) ;
+		fates_recth_wt:units = "PSU" ;
+		fates_recth_wt:long_name = "soil water table depth threshold when there is no recruitment" ;
+
 	double fates_senleaf_long_fdrought(fates_pft) ;
 		fates_senleaf_long_fdrought:units = "unitless[0-1]" ;
 		fates_senleaf_long_fdrought:long_name = "multiplication factor for leaf longevity of senescent leaves during drought" ;
@@ -812,7 +832,7 @@ variables:
 		fates_vai_width_increase_factor:long_name = "factor by which each leaf+stem scattering element increases in VAI width (1 = uniform spacing) (NOT USED)" ;  
 	double  fates_sal_sid ;
 		fates_sal_sid:units = "unitless" ;
-		fates_sal_sid:long_name = "the site id of salinity file name used to give the salinity file, 1- BC, 2 – CPMS, 3 – CPGWI, 4- TEMPEST" ;
+		fates_sal_sid:long_name = "the site id of salinity file name used to give the salinity file, 1- BC, 2 – CPMS, 3 – CPGWI, 4- TEMPEST , 5 - Lake Erie" ;
 	double  fates_sal_fid ;
 		fates_sal_fid:units = "unitless" ;
 		fates_sal_fid:long_name = "the number of salinity instance of a given site, used to define salinity input file name " ;
@@ -1038,13 +1058,15 @@ data:
 
  fates_hydr_frt_loss_salk = 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001 ;
 
+ fates_hydr_frt_loss_sata = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ;
+
  fates_hydr_vg_dn_sal = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ;
 
  fates_hydr_vg_da_sal = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ;
  
  fates_hydr_PSU_vg_init = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ;
 
- fates_max_rec = 40000, 40000, 40000, 40000, 40000, 40000, 40000, 40000, 400000, 400000, 400000, 400000 ;
+ fates_max_rec = 10000, 10000, 10000, 10000, 10000, 10000, 10000, 10000, 100000, 400000, 400000, 400000 ;
 
  fates_hydr_vcmax_loss_sal_a = 0.17, 0.17, 0.17, 0.17, 0.17, 0.17, 0.17, 0.17, 0.17, 0.17, 0.17, 0.17 ;
  
@@ -1180,6 +1202,12 @@ data:
 
  fates_leaf_slatop = 0.012, 0.01, 0.024, 0.012, 0.03, 0.03, 0.012, 0.03,
     0.03, 0.03, 0.03, 0.03 ;
+
+ fates_leaf_gs_max = 160000, 160000, 160000, 160000, 160000, 160000,
+    160000, 160000, 160000, 160000, 160000, 400000 ;
+    
+ fates_leaf_gs_min = 10000, 10000, 10000, 10000, 10000, 10000,
+    10000, 10000, 10000, 10000, 10000, 40000 ;    
 
  fates_leaf_stomatal_intercept = 10000, 10000, 10000, 10000, 10000, 10000,
     10000, 10000, 10000, 10000, 10000, 40000 ;
@@ -1369,6 +1397,10 @@ data:
     0.5, 0.5, 0.5 ;
 
  fates_seed_suppl = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ;
+
+ fates_recth_sal = 4, 4, 4, 4, 4, 4, 4, 4, 4, 8, 8, 8 ;
+
+ fates_recth_wt = 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0, 0, 0 ;
 
  fates_senleaf_long_fdrought = 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 ;
 

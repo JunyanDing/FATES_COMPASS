@@ -552,7 +552,8 @@ module FatesHistoryInterfaceMod
   integer :: ih_tth_scpf               
   integer :: ih_sth_scpf                     
   integer :: ih_lth_scpf                     
-  integer :: ih_awp_scpf                     
+  integer :: ih_awp_scpf
+  integer :: ih_fred_scpf        ! Junyan added to track fine root loss due to flooding and salinity               
   integer :: ih_twp_scpf  
   integer :: ih_swp_scpf                     
   integer :: ih_lwp_scpf  
@@ -3893,7 +3894,8 @@ end subroutine update_history_hifrq
           hio_tth_scpf          => this%hvars(ih_tth_scpf)%r82d, &               
           hio_sth_scpf          => this%hvars(ih_sth_scpf)%r82d, &                     
           hio_lth_scpf          => this%hvars(ih_lth_scpf)%r82d, &                     
-          hio_awp_scpf          => this%hvars(ih_awp_scpf)%r82d, &                     
+          hio_awp_scpf          => this%hvars(ih_awp_scpf)%r82d, &
+          hio_fred_scpf          => this%hvars(ih_fred_scpf)%r82d, &                               
           hio_twp_scpf          => this%hvars(ih_twp_scpf)%r82d, &  
           hio_swp_scpf          => this%hvars(ih_swp_scpf)%r82d, &                     
           hio_lwp_scpf          => this%hvars(ih_lwp_scpf)%r82d, &  
@@ -4079,6 +4081,15 @@ end subroutine update_history_hifrq
                   hio_awp_scpf(io_si,iscpf)             = hio_awp_scpf(io_si,iscpf) + &
                        mean_aroot * number_fraction     ! [MPa]
                   
+                  ! Junyan added below
+                  mean_aroot = sum(ccohort_hydr%kfr_red_layer(:)*ccohort_hydr%v_aroot_layer(:)) / &
+                       sum(ccohort_hydr%v_aroot_layer(:))
+                  
+                  hio_fred_scpf(io_si,iscpf)             = hio_fred_scpf(io_si,iscpf) + &
+                  mean_aroot  * number_fraction         ! [m3 m-3]                  
+                  
+                  ! end of Junyan addition                  
+                                    
                   hio_twp_scpf(io_si,iscpf)             = hio_twp_scpf(io_si,iscpf) + &
                         ccohort_hydr%psi_troot  * number_fraction       ! [MPa]
                   
@@ -6241,6 +6252,12 @@ end subroutine update_history_hifrq
              long='absorbing root water potential', use_default='inactive', &
              avgflag='A', vtype=site_size_pft_r8, hlms='CLM:ALM', flushval=0.0_r8,    &
              upfreq=4, ivar=ivar, initialize=initialize_variables, index = ih_awp_scpf )
+       
+       ! Junyan added            
+       call this%set_history_var(vname='FATES_FRED_SCPF', units='fraction', &
+             long='fraction of total live fine roots', use_default='inactive', &
+             avgflag='A', vtype=site_size_pft_r8, hlms='CLM:ALM', flushval=0.0_r8,    &
+             upfreq=4, ivar=ivar, initialize=initialize_variables, index = ih_fred_scpf )             
        
        call this%set_history_var(vname='FATES_TWP_SCPF', units='MPa', &
              long='transporting root water potential', use_default='inactive', &
